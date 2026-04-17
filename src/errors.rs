@@ -29,6 +29,15 @@ pub enum ShotError {
 
     #[error("{0}")]
     HotkeyError(String),
+
+    #[error("daemon is already running")]
+    WatchAlreadyRunning,
+
+    #[error("{0}")]
+    TrayError(String),
+
+    #[error("daemon did not respond within 3s")]
+    WatchTimeout,
 }
 
 impl ShotError {
@@ -43,6 +52,9 @@ impl ShotError {
             Self::InitError(_) => "init-error",
             Self::ArgError(_) => "arg-error",
             Self::HotkeyError(_) => "hotkey-error",
+            Self::WatchAlreadyRunning => "watch-already-running",
+            Self::TrayError(_) => "tray-error",
+            Self::WatchTimeout => "timeout",
         }
     }
 }
@@ -67,6 +79,9 @@ pub fn format_error_message(err: &ShotError) -> String {
         ShotError::ArgError(s) => format!("Argument error: {}", s),
         ShotError::InitError(s) => format!("Init error: {}", s),
         ShotError::HotkeyError(s) => format!("Hotkey error: {}", s),
+        ShotError::WatchAlreadyRunning => "daemon is already running".into(),
+        ShotError::TrayError(s) => format!("Tray icon error: {}", s),
+        ShotError::WatchTimeout => "daemon did not respond within 3s".into(),
     }
 }
 
@@ -169,6 +184,49 @@ mod tests {
     #[test]
     fn hotkey_error_code() {
         assert_eq!(ShotError::HotkeyError("x".into()).code(), "hotkey-error");
+    }
+
+    #[test]
+    fn watch_already_running_code() {
+        assert_eq!(ShotError::WatchAlreadyRunning.code(), "watch-already-running");
+    }
+
+    #[test]
+    fn tray_error_code() {
+        assert_eq!(ShotError::TrayError("x".into()).code(), "tray-error");
+    }
+
+    #[test]
+    fn watch_timeout_code() {
+        assert_eq!(ShotError::WatchTimeout.code(), "timeout");
+    }
+
+    #[test]
+    fn watch_already_running_format() {
+        let e = ShotError::WatchAlreadyRunning;
+        let output = format_error(&e);
+        assert!(output.contains("status: error"));
+        assert!(output.contains("code: watch-already-running"));
+        assert!(output.contains("daemon is already running"));
+        assert_eq!(format_error_message(&e), "daemon is already running");
+    }
+
+    #[test]
+    fn tray_error_format() {
+        let e = ShotError::TrayError("cannot add icon".into());
+        let output = format_error(&e);
+        assert!(output.contains("code: tray-error"));
+        assert!(output.contains("cannot add icon"));
+        assert_eq!(format_error_message(&e), "Tray icon error: cannot add icon");
+    }
+
+    #[test]
+    fn watch_timeout_format() {
+        let e = ShotError::WatchTimeout;
+        let output = format_error(&e);
+        assert!(output.contains("code: timeout"));
+        assert!(output.contains("daemon did not respond within 3s"));
+        assert_eq!(format_error_message(&e), "daemon did not respond within 3s");
     }
 
     #[test]
