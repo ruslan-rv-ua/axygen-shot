@@ -26,6 +26,9 @@ pub enum ShotError {
 
     #[error("{0}")]
     ArgError(String),
+
+    #[error("{0}")]
+    HotkeyError(String),
 }
 
 impl ShotError {
@@ -39,6 +42,7 @@ impl ShotError {
             Self::ClipboardError(_) => "clipboard-error",
             Self::InitError(_) => "init-error",
             Self::ArgError(_) => "arg-error",
+            Self::HotkeyError(_) => "hotkey-error",
         }
     }
 }
@@ -46,6 +50,21 @@ impl ShotError {
 /// Format error for stderr (PRD story 51)
 pub fn format_error(err: &ShotError) -> String {
     format!("status: error\ncode: {}\nmessage: {}", err.code(), err)
+}
+
+/// Human-readable message only (no key:value format). Used by watch mode MessageBox.
+pub fn format_error_message(err: &ShotError) -> String {
+    match err {
+        ShotError::WindowNotFound(s) => format!("Window not found: {}", s),
+        ShotError::WindowMinimized => "Target window is minimized. Restore it and try again.".into(),
+        ShotError::CaptureFailed(s) => format!("Capture failed: {}", s),
+        ShotError::StorageFailed(s) => format!("Could not save screenshot: {}", s),
+        ShotError::ClipboardError(s) => format!("Clipboard error: {}", s),
+        ShotError::ConfigError(s) => format!("Configuration error: {}", s),
+        ShotError::ArgError(s) => format!("Argument error: {}", s),
+        ShotError::InitError(s) => format!("Init error: {}", s),
+        ShotError::HotkeyError(s) => format!("Hotkey error: {}", s),
+    }
 }
 
 /// Format success for stdout (PRD story 50)
@@ -142,5 +161,28 @@ mod tests {
         assert!(output.contains(r"file: C:\project\screenshots\test.png"));
         assert!(output.contains("window: Notepad (PID 1234)"));
         assert!(output.contains("size: 1920x1080"));
+    }
+
+    #[test]
+    fn hotkey_error_code() {
+        assert_eq!(ShotError::HotkeyError("x".into()).code(), "hotkey-error");
+    }
+
+    #[test]
+    fn format_error_message_returns_human_readable() {
+        let cases = vec![
+            (ShotError::WindowNotFound("test".into()), "Window not found: test"),
+            (ShotError::WindowMinimized, "Target window is minimized. Restore it and try again."),
+            (ShotError::CaptureFailed("x".into()), "Capture failed: x"),
+            (ShotError::StorageFailed("x".into()), "Could not save screenshot: x"),
+            (ShotError::ClipboardError("x".into()), "Clipboard error: x"),
+            (ShotError::ConfigError("x".into()), "Configuration error: x"),
+            (ShotError::ArgError("x".into()), "Argument error: x"),
+            (ShotError::InitError("x".into()), "Init error: x"),
+            (ShotError::HotkeyError("x".into()), "Hotkey error: x"),
+        ];
+        for (err, expected) in cases {
+            assert_eq!(format_error_message(&err), expected, "Failed for {:?}", err);
+        }
     }
 }
