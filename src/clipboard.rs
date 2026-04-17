@@ -8,6 +8,11 @@ use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
 };
 use windows::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GlobalFree(hmem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+}
 use windows::Win32::System::Ole::{CF_DIB, CF_UNICODETEXT};
 
 /// Write to clipboard based on mode.
@@ -27,8 +32,7 @@ pub fn write_clipboard(
             ClipboardMode::Path => set_path(file_path),
             ClipboardMode::Image => set_image(png_bytes, width, height),
             ClipboardMode::Both => {
-                set_path(file_path)?;
-                set_image(png_bytes, width, height)
+                set_path(file_path).and_then(|()| set_image(png_bytes, width, height))
             }
         };
 
@@ -49,14 +53,20 @@ unsafe fn set_path(file_path: &Path) -> Result<(), ShotError> {
         .map_err(|e| ShotError::ClipboardError(format!("GlobalAlloc failed: {}", e)))?;
     let ptr = unsafe { GlobalLock(hmem) };
     if ptr.is_null() {
+        let _ = unsafe { GlobalFree(hmem.0) };
         return Err(ShotError::ClipboardError("GlobalLock returned null".into()));
     }
     unsafe {
         std::ptr::copy_nonoverlapping(wide.as_ptr() as *const u8, ptr as *mut u8, byte_len);
         let _ = GlobalUnlock(hmem);
-        SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(hmem.0)))
     }
-    .map_err(|e| ShotError::ClipboardError(format!("SetClipboardData(text) failed: {}", e)))?;
+    if let Err(e) = unsafe { SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(hmem.0))) } {
+        let _ = unsafe { GlobalFree(hmem.0) };
+        return Err(ShotError::ClipboardError(format!(
+            "SetClipboardData(text) failed: {}",
+            e
+        )));
+    }
 
     Ok(())
 }
@@ -109,6 +119,7 @@ unsafe fn set_image(png_bytes: &[u8], width: u32, height: u32) -> Result<(), Sho
         .map_err(|e| ShotError::ClipboardError(format!("GlobalAlloc failed: {}", e)))?;
     let ptr = unsafe { GlobalLock(hmem) };
     if ptr.is_null() {
+        let _ = unsafe { GlobalFree(hmem.0) };
         return Err(ShotError::ClipboardError("GlobalLock returned null".into()));
     }
     unsafe {
@@ -123,9 +134,14 @@ unsafe fn set_image(png_bytes: &[u8], width: u32, height: u32) -> Result<(), Sho
             pixel_size,
         );
         let _ = GlobalUnlock(hmem);
-        SetClipboardData(CF_DIB.0 as u32, Some(HANDLE(hmem.0)))
     }
-    .map_err(|e| ShotError::ClipboardError(format!("SetClipboardData(DIB) failed: {}", e)))?;
+    if let Err(e) = unsafe { SetClipboardData(CF_DIB.0 as u32, Some(HANDLE(hmem.0))) } {
+        let _ = unsafe { GlobalFree(hmem.0) };
+        return Err(ShotError::ClipboardError(format!(
+            "SetClipboardData(DIB) failed: {}",
+            e
+        )));
+    }
 
     Ok(())
 }
