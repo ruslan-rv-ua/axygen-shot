@@ -7,11 +7,12 @@ pub struct SavedFile {
 }
 
 /// Replace invalid filename characters (and spaces) with hyphens.
-/// Characters: : \ / * ? " < > | (space)
+/// Characters: : \ / * ? " < > | (space) and control chars (0x00–0x1F)
 pub fn sanitize_filename(s: &str) -> String {
     s.chars()
         .map(|c| match c {
             ':' | '\\' | '/' | '*' | '?' | '"' | '<' | '>' | '|' | ' ' => '-',
+            c if c.is_control() => '-',
             _ => c,
         })
         .collect()
@@ -70,6 +71,11 @@ mod tests {
             sanitize_filename("a/b*c?d\"e<f>g|h:i\\j k"),
             "a-b-c-d-e-f-g-h-i-j-k",
         );
+    }
+
+    #[test]
+    fn sanitize_strips_control_chars() {
+        assert_eq!(sanitize_filename("app\x00name\x1f"), "app-name-");
     }
 
     // --- build_filename ---
