@@ -15,7 +15,7 @@ just run -- --list-windows           # run with args
 
 ## Project structure
 
-- `src/main.rs` — entry point, AttachConsole, mode dispatch
+- `src/main.rs` — entry point, mode dispatch
 - `src/cli.rs` — clap derive struct, Mode enum
 - `src/config.rs` — TOML parsing, walk-up discovery, merge, init
 - `src/window_resolver.rs` — WindowEnumerator trait, Win32 impl, resolve/list
@@ -46,9 +46,9 @@ message: <human-readable>
 
 ## Gotchas
 
-- DPI awareness MUST be set before any window enumeration
+- DPI awareness set via manifest (shot.manifest) — PerMonitorV2
 - PrintWindow PW_RENDERFULLCONTENT = 0x00000002 (undocumented flag)
-- AttachConsole must happen before any stdout/stderr output
 - CF_DIB (not CF_BITMAP) for clipboard — device-independent
-- windows crate feature flags may need adjustment — check docs.rs
+- GlobalFree and MessageBeep use raw FFI — not exposed in windows crate v0.62
+- windows crate v0.62: some APIs moved (PrintWindow → Xps, CF_DIB → Ole)
 - All modules are stateless — no global mutable state
