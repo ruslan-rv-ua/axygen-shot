@@ -2,6 +2,7 @@ use clap::ValueEnum;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
+use crate::cli::CliArgs;
 use crate::errors::ShotError;
 
 /// Clipboard behavior — canonical definition.
@@ -72,6 +73,128 @@ pub fn find_config(start_dir: &Path) -> Result<Option<(TomlConfig, PathBuf)>, Sh
     }
 }
 
+/// Merge CLI args with optional TOML config. CLI values override TOML.
+pub fn merge(
+    cli: &CliArgs,
+    toml: Option<(TomlConfig, PathBuf)>,
+) -> Result<CaptureConfig, ShotError> {
+    let (toml_config, project_root) = match toml {
+        Some((tc, root)) => (Some(tc), root),
+        None => (
+            None,
+            std::env::current_dir()
+                .map_err(|e| ShotError::ConfigError(format!("Cannot determine CWD: {}", e)))?,
+        ),
+    };
+
+    let process = cli
+        .process
+        .clone()
+        .or(toml_config.as_ref().and_then(|t| t.process.clone()));
+    let title = cli
+        .title
+        .clone()
+        .or(toml_config.as_ref().and_then(|t| t.title.clone()));
+
+    if process.is_none() && title.is_none() {
+        return Err(ShotError::ConfigError(
+            "No target: provide --process or --title (or set in shot.toml)".into(),
+        ));
+    }
+
+    let folder = cli.folder.clone().unwrap_or_else(|| {
+        toml_config
+            .as_ref()
+            .map(|t| t.folder.clone())
+            .unwrap_or_else(|| "screenshots".to_string())
+    });
+    validate_folder(&folder)?;
+
+    let clipboard = cli.clipboard.unwrap_or_else(|| {
+        toml_config
+            .as_ref()
+            .map(|t| t.clipboard)
+            .unwrap_or_default()
+    });
+
+    Ok(CaptureConfig {
+        process,
+        title,
+        folder,
+        clipboard,
+        label: cli.label.clone(),
+        quiet: cli.quiet,
+        verbose: cli.verbose,
+        project_root,
+    })
+}
+
+/// Create shot.toml template. Takes dir param for testability (spec uses CWD).
+pub fn init(dir: &Path, process: Option<&str>, title: Option<&str>) -> Result<(), ShotError> {
+    let config_path = dir.join("shot.toml");
+    if config_path.exists() {
+        return Err(ShotError::InitError("shot.toml already exists".into()));
+    }
+
+    let process_line = match process {
+        Some(p) => format!("process = \"{}\"", p),
+        None => "\
+# process: name of your app's .exe file (recommended).\n\
+# You already know this — it's in your Cargo.toml, .csproj, Makefile, etc.\n\
+# process = \"myapp.exe\""
+            .to_string(),
+    };
+    let title_line = match title {
+        Some(t) => format!("title   = \"{}\"", t),
+        None => "\
+# title: substring of the window title (alternative or complement to process).\n\
+# Matched as \"title contains substring\" — position-independent, works with dynamic titles.\n\
+# title   = \"MyApp\""
+            .to_string(),
+    };
+
+    let template = format!(
+        "\
+# shot.toml — Axygen Shot configuration
+#
+# At least one of 'process' or 'title' must be uncommented.
+
+{process_line}
+
+{title_line}
+
+folder    = \"screenshots\"   # output subfolder (default: \"screenshots\")
+clipboard = \"path\"          # \"path\" | \"image\" | \"both\" (default: \"path\")
+# hotkey  = \"Win+F12\"       # watch mode hotkey (default: \"Win+F12\")
+"
+    );
+
+    std::fs::write(&config_path, &template)
+        .map_err(|e| ShotError::InitError(format!("Cannot write shot.toml: {}", e)))?;
+
+    // Append "screenshots/" to .gitignore
+    let gitignore_path = dir.join(".gitignore");
+    let entry = "screenshots/";
+    let already_present = gitignore_path.exists() && {
+        let content = std::fs::read_to_string(&gitignore_path)
+            .map_err(|e| ShotError::InitError(format!("Cannot read .gitignore: {}", e)))?;
+        content.lines().any(|line| line.trim() == entry)
+    };
+
+    if !already_present {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&gitignore_path)
+            .map_err(|e| ShotError::InitError(format!("Cannot write .gitignore: {}", e)))?;
+        writeln!(file, "{}", entry)
+            .map_err(|e| ShotError::InitError(format!("Cannot write .gitignore: {}", e)))?;
+    }
+
+    Ok(())
+}
+
 /// Merged config — everything needed for a capture operation
 pub struct CaptureConfig {
     pub process: Option<String>,
@@ -87,6 +210,8 @@ pub struct CaptureConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::CliArgs;
+    use clap::Parser;
 
     // --- validate_folder ---
 
@@ -207,5 +332,150 @@ mod tests {
         )
         .unwrap();
         assert!(find_config(dir.path()).unwrap().is_some());
+    }
+
+    // --- merge ---
+
+    #[test]
+    fn merge_cli_overrides_toml_process() {
+        let cli = CliArgs::parse_from(["shot", "--process=cli.exe"]);
+        let toml_cfg = TomlConfig {
+            process: Some("toml.exe".into()),
+            title: None,
+            folder: "screenshots".into(),
+            clipboard: ClipboardMode::Path,
+            hotkey: None,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let config = merge(&cli, Some((toml_cfg, dir.path().to_path_buf()))).unwrap();
+        assert_eq!(config.process.as_deref(), Some("cli.exe"));
+    }
+
+    #[test]
+    fn merge_toml_provides_defaults() {
+        let cli = CliArgs::parse_from(["shot"]);
+        let toml_cfg = TomlConfig {
+            process: Some("toml.exe".into()),
+            title: None,
+            folder: "output".into(),
+            clipboard: ClipboardMode::Image,
+            hotkey: None,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let config = merge(&cli, Some((toml_cfg, dir.path().to_path_buf()))).unwrap();
+        assert_eq!(config.process.as_deref(), Some("toml.exe"));
+        assert_eq!(config.folder, "output");
+        assert_eq!(config.clipboard, ClipboardMode::Image);
+    }
+
+    #[test]
+    fn merge_no_target_with_config_errors() {
+        let cli = CliArgs::parse_from(["shot"]);
+        let toml_cfg = TomlConfig {
+            process: None,
+            title: None,
+            folder: "screenshots".into(),
+            clipboard: ClipboardMode::Path,
+            hotkey: None,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        assert!(merge(&cli, Some((toml_cfg, dir.path().to_path_buf()))).is_err());
+    }
+
+    #[test]
+    fn merge_no_target_no_config_errors() {
+        let cli = CliArgs::parse_from(["shot"]);
+        assert!(merge(&cli, None).is_err());
+    }
+
+    #[test]
+    fn merge_cli_folder_overrides_toml() {
+        let cli = CliArgs::parse_from(["shot", "--process=test.exe", "--folder=custom"]);
+        let toml_cfg = TomlConfig {
+            process: None,
+            title: None,
+            folder: "screenshots".into(),
+            clipboard: ClipboardMode::Path,
+            hotkey: None,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let config = merge(&cli, Some((toml_cfg, dir.path().to_path_buf()))).unwrap();
+        assert_eq!(config.folder, "custom");
+    }
+
+    #[test]
+    fn merge_invalid_folder_errors() {
+        let cli = CliArgs::parse_from(["shot", "--process=test.exe", "--folder=../bad"]);
+        assert!(merge(&cli, None).is_err());
+    }
+
+    #[test]
+    fn merge_default_clipboard_is_path() {
+        let cli = CliArgs::parse_from(["shot", "--process=test.exe"]);
+        let config = merge(&cli, None).unwrap();
+        assert_eq!(config.clipboard, ClipboardMode::Path);
+    }
+
+    // --- init ---
+
+    #[test]
+    fn init_creates_shot_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path(), None, None).unwrap();
+        let path = dir.path().join("shot.toml");
+        assert!(path.exists());
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.contains("folder"));
+        assert!(content.contains("clipboard"));
+    }
+
+    #[test]
+    fn init_with_process() {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path(), Some("myapp.exe"), None).unwrap();
+        let content = std::fs::read_to_string(dir.path().join("shot.toml")).unwrap();
+        assert!(content.lines().any(|l| l == r#"process = "myapp.exe""#));
+    }
+
+    #[test]
+    fn init_with_title() {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path(), None, Some("MyApp")).unwrap();
+        let content = std::fs::read_to_string(dir.path().join("shot.toml")).unwrap();
+        assert!(content.lines().any(|l| l == r#"title   = "MyApp""#));
+    }
+
+    #[test]
+    fn init_fails_if_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("shot.toml"), "existing").unwrap();
+        assert!(init(dir.path(), None, None).is_err());
+    }
+
+    #[test]
+    fn init_creates_gitignore() {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path(), None, None).unwrap();
+        let content = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+        assert!(content.contains("screenshots/"));
+    }
+
+    #[test]
+    fn init_appends_to_existing_gitignore() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".gitignore"), "node_modules/\n").unwrap();
+        init(dir.path(), None, None).unwrap();
+        let content = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+        assert!(content.contains("node_modules/"));
+        assert!(content.contains("screenshots/"));
+    }
+
+    #[test]
+    fn init_skips_duplicate_gitignore_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".gitignore"), "screenshots/\n").unwrap();
+        init(dir.path(), None, None).unwrap();
+        let content = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+        assert_eq!(content.matches("screenshots/").count(), 1);
     }
 }
