@@ -36,7 +36,7 @@ fn run() -> Result<(), ShotError> {
                 .map_err(|e| ShotError::ConfigError(format!("Cannot determine CWD: {}", e)))?;
             let toml = config::find_config(&cwd)?;
             let cfg = config::merge(&args, toml)?;
-            watch::run(&cfg)
+            watch::run(&cfg, args.daemon_parent_pid)
         }
     }
 }

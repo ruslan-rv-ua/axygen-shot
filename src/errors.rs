@@ -30,12 +30,16 @@ pub enum ShotError {
     #[error("{0}")]
     HotkeyError(String),
 
+    // Temporary #[allow(dead_code)]: will be removed in Task 6 when these variants are constructed
+    #[allow(dead_code)]
     #[error("daemon is already running")]
     WatchAlreadyRunning,
 
+    #[allow(dead_code)]
     #[error("{0}")]
     TrayError(String),
 
+    #[allow(dead_code)]
     #[error("daemon did not respond within 3s")]
     WatchTimeout,
 }
@@ -188,7 +192,10 @@ mod tests {
 
     #[test]
     fn watch_already_running_code() {
-        assert_eq!(ShotError::WatchAlreadyRunning.code(), "watch-already-running");
+        assert_eq!(
+            ShotError::WatchAlreadyRunning.code(),
+            "watch-already-running"
+        );
     }
 
     #[test]

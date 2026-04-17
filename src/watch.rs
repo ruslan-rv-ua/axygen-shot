@@ -121,7 +121,7 @@ fn parse_vk(key: &str, full_hotkey: &str) -> Result<u32, ShotError> {
     }
 }
 
-pub fn run(cfg: &CaptureConfig) -> Result<(), ShotError> {
+pub fn run(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
     if !is_detached() {
         let child_pid = launch_daemon()?;
         if !cfg.quiet || cfg.verbose {
@@ -129,7 +129,7 @@ pub fn run(cfg: &CaptureConfig) -> Result<(), ShotError> {
         }
         return Ok(());
     }
-    run_daemon(cfg)
+    run_daemon(cfg, parent_pid)
 }
 
 fn is_detached() -> bool {
@@ -207,7 +207,8 @@ fn launch_daemon() -> Result<u32, ShotError> {
     }
 }
 
-fn run_daemon(cfg: &CaptureConfig) -> Result<(), ShotError> {
+fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
+    let _ = parent_pid;
     // Parse hotkey before creating any windows
     let (modifiers, vk) = parse_hotkey(&cfg.hotkey)?;
 
