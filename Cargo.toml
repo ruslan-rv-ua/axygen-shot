@@ -1,0 +1,25 @@
+[package]
+name = "axygen-shot"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "shot"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+png = "0.17"
+thiserror = "2"
+chrono = { version = "0.4", features = ["clock"], default-features = false }
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
