@@ -1,5 +1,3 @@
-#![windows_subsystem = "windows"]
-
 mod audio;
 mod capture;
 mod cli;
@@ -13,14 +11,6 @@ use errors::ShotError;
 use window_resolver::Win32Enumerator;
 
 fn main() {
-    // Attach to parent console for stdout/stderr
-    unsafe {
-        use windows::Win32::System::Console::*;
-        if AttachConsole(ATTACH_PARENT_PROCESS).is_err() {
-            let _ = AllocConsole();
-        }
-    }
-
     match run() {
         Ok(()) => {}
         Err(e) => {
