@@ -1,4 +1,15 @@
 use crate::errors::ShotError;
+use std::ffi::OsString;
+use std::os::windows::ffi::OsStringExt;
+use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, MAX_PATH, TRUE};
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    EnumWindows, GetClassNameW, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+    GetWindowThreadProcessId, IsWindowVisible,
+};
+use windows::core::PWSTR;
 
 #[derive(Clone, Debug)]
 pub struct WindowInfo {
@@ -67,6 +78,99 @@ pub fn list_all(enumerator: &dyn WindowEnumerator) -> Vec<WindowInfo> {
         .into_iter()
         .filter(|w| !w.title.is_empty())
         .collect()
+}
+
+pub struct Win32Enumerator;
+
+impl WindowEnumerator for Win32Enumerator {
+    fn enumerate(&self) -> Vec<WindowInfo> {
+        let mut windows: Vec<WindowInfo> = Vec::new();
+        unsafe {
+            let _ = EnumWindows(
+                Some(enum_callback),
+                LPARAM(&mut windows as *mut Vec<WindowInfo> as isize),
+            );
+        }
+        windows
+    }
+
+    fn get_foreground(&self) -> Option<isize> {
+        unsafe {
+            let hwnd = GetForegroundWindow();
+            if hwnd.0.is_null() {
+                None
+            } else {
+                Some(hwnd.0 as isize)
+            }
+        }
+    }
+}
+
+unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
+    let windows = unsafe { &mut *(lparam.0 as *mut Vec<WindowInfo>) };
+
+    if !unsafe { IsWindowVisible(hwnd) }.as_bool() {
+        return TRUE;
+    }
+
+    let title_len = unsafe { GetWindowTextLengthW(hwnd) };
+    if title_len == 0 {
+        return TRUE;
+    }
+    let mut title_buf = vec![0u16; (title_len + 1) as usize];
+    unsafe { GetWindowTextW(hwnd, &mut title_buf) };
+    let title = OsString::from_wide(&title_buf[..title_len as usize])
+        .to_string_lossy()
+        .to_string();
+
+    if title.is_empty() {
+        return TRUE;
+    }
+
+    let mut class_buf = [0u16; 256];
+    let class_len = unsafe { GetClassNameW(hwnd, &mut class_buf) };
+    if class_len > 0 {
+        let class_name = OsString::from_wide(&class_buf[..class_len as usize])
+            .to_string_lossy()
+            .to_string();
+        if class_name == "Shell_TrayWnd" || class_name == "Progman" {
+            return TRUE;
+        }
+    }
+
+    let mut pid: u32 = 0;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+
+    let process_name = get_process_name(pid).unwrap_or_default();
+
+    windows.push(WindowInfo {
+        hwnd: hwnd.0 as isize,
+        title,
+        process_name,
+        pid,
+    });
+
+    TRUE
+}
+
+fn get_process_name(pid: u32) -> Option<String> {
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; MAX_PATH as usize];
+        let mut size = buf.len() as u32;
+        let result = QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_FORMAT(0),
+            PWSTR(buf.as_mut_ptr()),
+            &mut size,
+        );
+        let _ = CloseHandle(handle);
+        result.ok()?;
+        let path = OsString::from_wide(&buf[..size as usize])
+            .to_string_lossy()
+            .to_string();
+        path.rsplit('\\').next().map(|s| s.to_string())
+    }
 }
 
 #[cfg(test)]
