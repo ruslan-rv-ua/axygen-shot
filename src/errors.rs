@@ -39,7 +39,6 @@ pub enum ShotError {
     #[error("{0}")]
     TrayError(String),
 
-    #[allow(dead_code)]
     #[error("daemon did not respond within 3s")]
     WatchTimeout,
 }

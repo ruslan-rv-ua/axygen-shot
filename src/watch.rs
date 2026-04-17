@@ -9,7 +9,8 @@ use std::os::windows::ffi::OsStrExt;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::System::Console::GetConsoleWindow;
 use windows::Win32::System::Threading::{
-    CreateProcessW, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION, STARTUPINFOW,
+    CreateEventW, CreateProcessW, GetCurrentProcessId, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
+    STARTUPINFOW, WaitForMultipleObjects,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
@@ -59,7 +60,6 @@ fn write_temp_file(parent_pid: u32, code: &str, message: &str) {
     let _ = std::fs::write(&path, format!("{}\n{}", code, message));
 }
 
-#[allow(dead_code)]
 fn read_and_delete_temp_file(parent_pid: u32) -> ShotError {
     let path = temp_file_path(parent_pid);
     let content = std::fs::read_to_string(&path).unwrap_or_default();
@@ -151,11 +151,53 @@ fn parse_vk(key: &str, full_hotkey: &str) -> Result<u32, ShotError> {
 
 pub fn run(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
     if !is_detached() {
-        let child_pid = launch_daemon()?;
-        if !cfg.quiet || cfg.verbose {
-            println!("status: ok\nwatch: started (PID {})", child_pid);
+        let my_pid = unsafe { GetCurrentProcessId() };
+
+        let ok_name = wide_string(&format!("Local\\axygen-shot-ok-{}", my_pid));
+        let err_name = wide_string(&format!("Local\\axygen-shot-err-{}", my_pid));
+
+        let ok_event = unsafe {
+            CreateEventW(None, false, false, windows::core::PCWSTR(ok_name.as_ptr()))
+                .map_err(|e| ShotError::HotkeyError(format!("Cannot create ok event: {}", e)))?
+        };
+        let err_event = unsafe {
+            CreateEventW(None, false, false, windows::core::PCWSTR(err_name.as_ptr())).map_err(
+                |e| {
+                    let _ = windows::Win32::Foundation::CloseHandle(ok_event);
+                    ShotError::HotkeyError(format!("Cannot create err event: {}", e))
+                },
+            )?
+        };
+
+        let child_pid = match launch_daemon(my_pid) {
+            Ok(pid) => pid,
+            Err(e) => {
+                unsafe {
+                    let _ = windows::Win32::Foundation::CloseHandle(ok_event);
+                    let _ = windows::Win32::Foundation::CloseHandle(err_event);
+                }
+                return Err(e);
+            }
+        };
+
+        // Block up to 3 s for the daemon to signal ok (index 0) or err (index 1).
+        let wait_result = unsafe { WaitForMultipleObjects(&[ok_event, err_event], false, 3000) };
+
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(ok_event);
+            let _ = windows::Win32::Foundation::CloseHandle(err_event);
         }
-        return Ok(());
+
+        return match wait_result.0 {
+            0 => {
+                if !cfg.quiet || cfg.verbose {
+                    println!("status: ok\nwatch: started (PID {})", child_pid);
+                }
+                Ok(())
+            }
+            1 => Err(read_and_delete_temp_file(my_pid)),
+            _ => Err(ShotError::WatchTimeout),
+        };
     }
     run_daemon(cfg, parent_pid)
 }
@@ -191,7 +233,7 @@ fn quote_arg(arg: &str) -> String {
     s
 }
 
-fn launch_daemon() -> Result<u32, ShotError> {
+fn launch_daemon(parent_pid: u32) -> Result<u32, ShotError> {
     let exe = std::env::current_exe()
         .map_err(|e| ShotError::HotkeyError(format!("Cannot find own executable: {}", e)))?;
 
@@ -203,6 +245,9 @@ fn launch_daemon() -> Result<u32, ShotError> {
         cmd_line.push(" ");
         cmd_line.push(quote_arg(&arg).as_str());
     }
+    let pid_arg = format!("--daemon-parent-pid={}", parent_pid);
+    cmd_line.push(" ");
+    cmd_line.push(pid_arg.as_str());
     let mut cmd_wide: Vec<u16> = cmd_line.encode_wide().chain(std::iter::once(0)).collect();
 
     let flags =
