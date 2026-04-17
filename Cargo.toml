@@ -30,6 +30,7 @@ features = [
     "Win32_Media_Audio",
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_Storage_Xps",
 ]
 
 [dev-dependencies]
