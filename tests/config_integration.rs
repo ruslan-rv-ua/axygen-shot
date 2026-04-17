@@ -47,7 +47,7 @@ fn walk_up_stops_at_git_boundary() {
     // Should fail with "No target" because config was not found (blocked by .git)
     assert!(
         stderr.contains("No target") || stderr.contains("config-error"),
-        "Expected 'No target' error, got: {}",
+        "Expected 'No target' or 'config-error', got: {}",
         stderr
     );
 }

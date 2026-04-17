@@ -84,6 +84,10 @@ unsafe fn set_image(png_bytes: &[u8], width: u32, height: u32) -> Result<(), Sho
         .next_frame(&mut rgba_pixels)
         .map_err(|e| ShotError::ClipboardError(format!("PNG frame error: {}", e)))?;
 
+    let info = reader.info();
+    debug_assert_eq!(info.width, width, "PNG width mismatch");
+    debug_assert_eq!(info.height, height, "PNG height mismatch");
+
     // Convert RGBA → BGRA and flip vertically (DIB is bottom-up)
     let stride = (width * 4) as usize;
     let mut bgra_bottomup = vec![0u8; (width * height * 4) as usize];

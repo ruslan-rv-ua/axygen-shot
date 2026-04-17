@@ -91,8 +91,6 @@ pub fn determine_mode(args: &CliArgs) -> Result<Mode, ShotError> {
     Ok(Mode::Capture)
 }
 
-// Implementation: Step 3
-
 #[cfg(test)]
 mod tests {
     use super::*;
