@@ -129,6 +129,11 @@ pub fn merge(
     })
 }
 
+/// Escape special characters for TOML basic string values.
+fn escape_toml_string(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 /// Create shot.toml template. Takes dir param for testability (spec uses CWD).
 pub fn init(dir: &Path, process: Option<&str>, title: Option<&str>) -> Result<(), ShotError> {
     let config_path = dir.join("shot.toml");
@@ -137,7 +142,7 @@ pub fn init(dir: &Path, process: Option<&str>, title: Option<&str>) -> Result<()
     }
 
     let process_line = match process {
-        Some(p) => format!("process = \"{}\"", p),
+        Some(p) => format!("process = \"{}\"", escape_toml_string(p)),
         None => "\
 # process: name of your app's .exe file (recommended).\n\
 # You already know this — it's in your Cargo.toml, .csproj, Makefile, etc.\n\
@@ -145,7 +150,7 @@ pub fn init(dir: &Path, process: Option<&str>, title: Option<&str>) -> Result<()
             .to_string(),
     };
     let title_line = match title {
-        Some(t) => format!("title   = \"{}\"", t),
+        Some(t) => format!("title   = \"{}\"", escape_toml_string(t)),
         None => "\
 # title: substring of the window title (alternative or complement to process).\n\
 # Matched as \"title contains substring\" — position-independent, works with dynamic titles.\n\
@@ -188,6 +193,16 @@ clipboard = \"path\"          # \"path\" | \"image\" | \"both\" (default: \"path
             .append(true)
             .open(&gitignore_path)
             .map_err(|e| ShotError::InitError(format!("Cannot write .gitignore: {}", e)))?;
+
+        // Ensure we start on a new line if file doesn't end with newline
+        if gitignore_path.exists() {
+            let content = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+            if !content.is_empty() && !content.ends_with('\n') {
+                writeln!(file)
+                    .map_err(|e| ShotError::InitError(format!("Cannot write .gitignore: {}", e)))?;
+            }
+        }
+
         writeln!(file, "{}", entry)
             .map_err(|e| ShotError::InitError(format!("Cannot write .gitignore: {}", e)))?;
     }
@@ -477,5 +492,24 @@ mod tests {
         init(dir.path(), None, None).unwrap();
         let content = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
         assert_eq!(content.matches("screenshots/").count(), 1);
+    }
+
+    #[test]
+    fn init_appends_newline_before_entry_if_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".gitignore"), "node_modules/").unwrap(); // no trailing \n
+        init(dir.path(), None, None).unwrap();
+        let content = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+        assert!(content.contains("node_modules/\nscreenshots/"));
+    }
+
+    #[test]
+    fn init_template_is_valid_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path(), Some("myapp.exe"), Some("MyApp")).unwrap();
+        let content = std::fs::read_to_string(dir.path().join("shot.toml")).unwrap();
+        let parsed: TomlConfig = toml::from_str(&content).unwrap();
+        assert_eq!(parsed.process.as_deref(), Some("myapp.exe"));
+        assert_eq!(parsed.title.as_deref(), Some("MyApp"));
     }
 }
