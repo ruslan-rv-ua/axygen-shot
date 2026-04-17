@@ -1,3 +1,4 @@
+#[link(name = "user32")]
 unsafe extern "system" {
     fn MessageBeep(uType: u32) -> i32;
 }
