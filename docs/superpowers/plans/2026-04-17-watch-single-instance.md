@@ -35,6 +35,11 @@
   }
 
   #[test]
+  fn watch_timeout_code() {
+      assert_eq!(ShotError::WatchTimeout.code(), "timeout");
+  }
+
+  #[test]
   fn watch_already_running_format() {
       let e = ShotError::WatchAlreadyRunning;
       let output = format_error(&e);
@@ -52,12 +57,21 @@
       assert!(output.contains("cannot add icon"));
       assert_eq!(format_error_message(&e), "Tray icon error: cannot add icon");
   }
+
+  #[test]
+  fn watch_timeout_format() {
+      let e = ShotError::WatchTimeout;
+      let output = format_error(&e);
+      assert!(output.contains("code: timeout"));
+      assert!(output.contains("daemon did not respond within 3s"));
+      assert_eq!(format_error_message(&e), "daemon did not respond within 3s");
+  }
   ```
 
 - [ ] **Step 2: Verify tests fail**
 
   Run: `just test`
-  Expected: FAIL — `WatchAlreadyRunning` and `TrayError` not defined.
+  Expected: FAIL — `WatchAlreadyRunning`, `TrayError`, and `WatchTimeout` not defined.
 
 - [ ] **Step 3: Add the variants**
 
@@ -69,6 +83,9 @@
 
   #[error("{0}")]
   TrayError(String),
+
+  #[error("daemon did not respond within 3s")]
+  WatchTimeout,
   ```
 
   In `code()`, add after `Self::HotkeyError(_) => "hotkey-error"`:
@@ -76,6 +93,7 @@
   ```rust
   Self::WatchAlreadyRunning => "watch-already-running",
   Self::TrayError(_) => "tray-error",
+  Self::WatchTimeout => "timeout",
   ```
 
   In `format_error_message()`, add after the `HotkeyError` arm:
@@ -83,6 +101,7 @@
   ```rust
   ShotError::WatchAlreadyRunning => "daemon is already running".into(),
   ShotError::TrayError(s) => format!("Tray icon error: {}", s),
+  ShotError::WatchTimeout => "daemon did not respond within 3s".into(),
   ```
 
 - [ ] **Step 4: Verify tests pass**
@@ -94,7 +113,7 @@
 
   ```
   git add src/errors.rs
-  git commit -m "feat(errors): add WatchAlreadyRunning and TrayError variants"
+  git commit -m "feat(errors): add WatchAlreadyRunning, TrayError, WatchTimeout variants"
   ```
 
 ---
@@ -306,8 +325,7 @@ These helpers are pure file I/O — testable without Win32.
           "hotkey-error" => ShotError::HotkeyError(message.to_string()),
           "tray-error" => ShotError::TrayError(message.to_string()),
           _ => ShotError::HotkeyError(format!("daemon failed to start: {}", message)),
-      }
-  }
+      }  }
   ```
 
 - [ ] **Step 4: Verify tests pass**
@@ -408,9 +426,7 @@ use windows::Win32::System::Threading::{
               Ok(())
           }
           1 => Err(read_and_delete_temp_file(my_pid)),
-          _ => Err(ShotError::HotkeyError(
-              "daemon did not respond within 3s".into(),
-          )),
+          _ => Err(ShotError::WatchTimeout),
       };
   }
   ```
