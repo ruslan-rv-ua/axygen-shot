@@ -119,8 +119,9 @@ fn launch_daemon() -> Result<u32, ShotError> {
     cmd_line.push(exe.as_os_str());
     cmd_line.push("\"");
     for arg in std::env::args().skip(1) {
-        cmd_line.push(" ");
-        cmd_line.push(&arg);
+        cmd_line.push(" \"");
+        cmd_line.push(arg.replace('"', "\\\"").as_str());
+        cmd_line.push("\"");
     }
     let mut cmd_wide: Vec<u16> = cmd_line.encode_wide().chain(std::iter::once(0)).collect();
 
