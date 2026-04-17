@@ -25,7 +25,6 @@ pub struct TomlConfig {
     pub folder: String,
     #[serde(default)]
     pub clipboard: ClipboardMode,
-    #[allow(dead_code)]
     pub hotkey: Option<String>,
 }
 
@@ -118,6 +117,10 @@ pub fn merge(
             .unwrap_or_default()
     });
 
+    let hotkey = cli.hotkey.clone()
+        .or(toml_config.as_ref().and_then(|t| t.hotkey.clone()))
+        .unwrap_or_else(|| "Win+F12".to_string());
+
     Ok(CaptureConfig {
         process,
         title,
@@ -127,6 +130,7 @@ pub fn merge(
         quiet: cli.quiet,
         verbose: cli.verbose,
         project_root,
+        hotkey,
     })
 }
 
@@ -221,6 +225,7 @@ pub struct CaptureConfig {
     pub quiet: bool,
     pub verbose: bool,
     pub project_root: PathBuf,
+    pub hotkey: String,
 }
 
 #[cfg(test)]
@@ -512,5 +517,32 @@ mod tests {
         let parsed: TomlConfig = toml::from_str(&content).unwrap();
         assert_eq!(parsed.process.as_deref(), Some("myapp.exe"));
         assert_eq!(parsed.title.as_deref(), Some("MyApp"));
+    }
+
+    #[test]
+    fn merge_hotkey_default() {
+        let cli = CliArgs::parse_from(["shot", "--process=x.exe"]);
+        let cfg = merge(&cli, None).unwrap();
+        assert_eq!(cfg.hotkey, "Win+F12");
+    }
+
+    #[test]
+    fn merge_hotkey_from_toml() {
+        let toml_str = "process = \"x.exe\"\nhotkey = \"Ctrl+F5\"";
+        let toml_config: TomlConfig = toml::from_str(toml_str).unwrap();
+        let cli = CliArgs::parse_from(["shot"]);
+        let cfg = merge(&cli, Some((toml_config, PathBuf::from("."))))
+            .unwrap();
+        assert_eq!(cfg.hotkey, "Ctrl+F5");
+    }
+
+    #[test]
+    fn merge_hotkey_cli_overrides_toml() {
+        let toml_str = "process = \"x.exe\"\nhotkey = \"Ctrl+F5\"";
+        let toml_config: TomlConfig = toml::from_str(toml_str).unwrap();
+        let cli = CliArgs::parse_from(["shot", "--hotkey=Win+F11"]);
+        let cfg = merge(&cli, Some((toml_config, PathBuf::from("."))))
+            .unwrap();
+        assert_eq!(cfg.hotkey, "Win+F11");
     }
 }
