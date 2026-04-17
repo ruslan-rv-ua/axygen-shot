@@ -33,7 +33,7 @@ pub fn play_startup() {
     }
 }
 
-/// Play busy sound (MB_ICONQUESTION) — spec: capture serialization.
+/// Play busy sound (SystemQuestion) — spec: capture serialization.
 /// Used when hotkey fires during an active capture.
 /// Fire-and-forget: errors silently ignored.
 pub fn play_busy() {

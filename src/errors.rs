@@ -6,7 +6,7 @@ pub enum ShotError {
     #[error("{0}")]
     WindowNotFound(String),
 
-    #[error("Target window is minimized; restore it and try again")]
+    #[error("Target window is minimized. Restore it and try again.")]
     WindowMinimized,
 
     #[error("{0}")]
@@ -53,6 +53,7 @@ pub fn format_error(err: &ShotError) -> String {
 }
 
 /// Human-readable message only (no key:value format). Used by watch mode MessageBox.
+/// NOTE: Keep these messages consistent with the #[error(...)] attributes above.
 pub fn format_error_message(err: &ShotError) -> String {
     match err {
         ShotError::WindowNotFound(s) => format!("Window not found: {}", s),
