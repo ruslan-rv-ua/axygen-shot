@@ -47,6 +47,34 @@ const HOTKEY_ID: i32 = 1;
 static mut DAEMON_CFG: Option<*const CaptureConfig> = None;
 static mut CAPTURING: bool = false;
 
+fn temp_file_path(parent_pid: u32) -> std::path::PathBuf {
+    let mut path = std::env::temp_dir();
+    path.push(format!("shot-err-{}.txt", parent_pid));
+    path
+}
+
+#[allow(dead_code)]
+fn write_temp_file(parent_pid: u32, code: &str, message: &str) {
+    let path = temp_file_path(parent_pid);
+    let _ = std::fs::write(&path, format!("{}\n{}", code, message));
+}
+
+#[allow(dead_code)]
+fn read_and_delete_temp_file(parent_pid: u32) -> ShotError {
+    let path = temp_file_path(parent_pid);
+    let content = std::fs::read_to_string(&path).unwrap_or_default();
+    let _ = std::fs::remove_file(&path);
+    let mut lines = content.lines();
+    let code = lines.next().unwrap_or("");
+    let message = lines.next().unwrap_or("daemon failed to start");
+    match code {
+        "watch-already-running" => ShotError::WatchAlreadyRunning,
+        "hotkey-error" => ShotError::HotkeyError(message.to_string()),
+        "tray-error" => ShotError::TrayError(message.to_string()),
+        _ => ShotError::HotkeyError(format!("daemon failed to start: {}", message)),
+    }
+}
+
 /// Parse a hotkey string like "Win+F12" into (modifiers, virtual_key_code).
 /// Modifiers are OR'd together. MOD_NOREPEAT is always added.
 /// At least one modifier required. Exactly one key required.
@@ -609,5 +637,42 @@ mod tests {
     fn quote_arg_backslash_before_quote() {
         // backslash before embedded quote must be doubled
         assert_eq!(quote_arg(r#"a\"b"#), r#""a\\\"b""#);
+    }
+
+    #[test]
+    fn temp_file_roundtrip_hotkey_error() {
+        let pid: u32 = 9_999_999;
+        write_temp_file(pid, "hotkey-error", "RegisterHotKey failed");
+        let err = read_and_delete_temp_file(pid);
+        assert!(matches!(err, ShotError::HotkeyError(_)));
+        assert!(err.to_string().contains("RegisterHotKey failed"));
+        assert!(!temp_file_path(pid).exists());
+    }
+
+    #[test]
+    fn temp_file_watch_already_running() {
+        let pid: u32 = 9_999_998;
+        write_temp_file(pid, "watch-already-running", "daemon is already running");
+        let err = read_and_delete_temp_file(pid);
+        assert!(matches!(err, ShotError::WatchAlreadyRunning));
+        assert!(!temp_file_path(pid).exists());
+    }
+
+    #[test]
+    fn temp_file_tray_error() {
+        let pid: u32 = 9_999_997;
+        write_temp_file(pid, "tray-error", "Shell_NotifyIcon failed");
+        let err = read_and_delete_temp_file(pid);
+        assert!(matches!(err, ShotError::TrayError(_)));
+        assert!(err.to_string().contains("Shell_NotifyIcon"));
+        assert!(!temp_file_path(pid).exists());
+    }
+
+    #[test]
+    fn temp_file_missing_falls_back() {
+        let pid: u32 = 9_999_996;
+        let _ = std::fs::remove_file(temp_file_path(pid));
+        let err = read_and_delete_temp_file(pid);
+        assert!(matches!(err, ShotError::HotkeyError(_)));
     }
 }
