@@ -66,9 +66,15 @@ Both event handles are closed after the wait.
 
 ```rust
 parent_pid = // from --daemon-parent-pid=N arg (passed to run_daemon, not via CaptureConfig)
-ok_event  = OpenEventW(EVENT_MODIFY_STATE, FALSE, "Local\\axygen-shot-ok-{parent_pid}")
-err_event = OpenEventW(EVENT_MODIFY_STATE, FALSE, "Local\\axygen-shot-err-{parent_pid}")
-// Both may be NULL (e.g., Restart path) — handled gracefully
+// Restart path: parent_pid is None → skip OpenEventW entirely (no parent waiting)
+let (ok_event, err_event) = if let Some(pid) = parent_pid {
+    (
+        OpenEventW(EVENT_MODIFY_STATE, FALSE, "Local\\axygen-shot-ok-{pid}"),
+        OpenEventW(EVENT_MODIFY_STATE, FALSE, "Local\\axygen-shot-err-{pid}"),
+    )
+} else {
+    (NULL, NULL)
+};
 ```
 
 The daemon calls `signal_ok(ok_event)` or `signal_err_or_popup(err_event, parent_pid, message)` at each exit point. If the handle is `NULL` (restart path), `signal_ok` is a no-op and `signal_err_or_popup` falls back to `MessageBoxW`.
