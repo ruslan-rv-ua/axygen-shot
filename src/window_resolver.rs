@@ -23,14 +23,18 @@ pub fn resolve(
     title: Option<&str>,
 ) -> Result<WindowInfo, ShotError> {
     let all = enumerator.enumerate();
+    let title_lower = title.map(|t| t.to_lowercase());
     let matches: Vec<&WindowInfo> = all
         .iter()
         .filter(|w| {
+            // Process: exact match (user types the .exe name)
             let process_match = process
                 .map(|p| w.process_name.eq_ignore_ascii_case(p))
                 .unwrap_or(false);
-            let title_match = title
-                .map(|t| w.title.to_lowercase().contains(&t.to_lowercase()))
+            // Title: substring match (user types any fragment of the window title)
+            let title_match = title_lower
+                .as_ref()
+                .map(|t| w.title.to_lowercase().contains(t.as_str()))
                 .unwrap_or(false);
             process_match || title_match
         })
@@ -56,7 +60,7 @@ pub fn resolve(
 }
 
 /// List all visible top-level windows.
-/// Excludes empty titles and shell windows.
+/// Excludes empty titles. Shell windows are excluded by the enumerator.
 pub fn list_all(enumerator: &dyn WindowEnumerator) -> Vec<WindowInfo> {
     enumerator
         .enumerate()
