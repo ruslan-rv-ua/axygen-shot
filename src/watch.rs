@@ -110,6 +110,33 @@ fn is_detached() -> bool {
     unsafe { GetConsoleWindow().0.is_null() }
 }
 
+// Windows CommandLineToArgvW-compatible quoting: doubles backslashes before quotes/end.
+fn quote_arg(arg: &str) -> String {
+    let mut s = String::from('"');
+    let mut backslashes = 0usize;
+    for c in arg.chars() {
+        match c {
+            '\\' => backslashes += 1,
+            '"' => {
+                for _ in 0..=backslashes {
+                    s.push('\\');
+                }
+                backslashes = 0;
+                s.push('"');
+                continue;
+            }
+            _ => backslashes = 0,
+        }
+        s.push(c);
+    }
+    // Double trailing backslashes so the closing quote isn't accidentally escaped.
+    for _ in 0..backslashes {
+        s.push('\\');
+    }
+    s.push('"');
+    s
+}
+
 fn launch_daemon() -> Result<u32, ShotError> {
     let exe = std::env::current_exe()
         .map_err(|e| ShotError::HotkeyError(format!("Cannot find own executable: {}", e)))?;
@@ -119,9 +146,8 @@ fn launch_daemon() -> Result<u32, ShotError> {
     cmd_line.push(exe.as_os_str());
     cmd_line.push("\"");
     for arg in std::env::args().skip(1) {
-        cmd_line.push(" \"");
-        cmd_line.push(arg.replace('"', "\\\"").as_str());
-        cmd_line.push("\"");
+        cmd_line.push(" ");
+        cmd_line.push(quote_arg(&arg).as_str());
     }
     let mut cmd_wide: Vec<u16> = cmd_line.encode_wide().chain(std::iter::once(0)).collect();
 
@@ -257,5 +283,27 @@ mod tests {
     fn control_alias() {
         let (mods, _) = parse_hotkey("Control+F1").unwrap();
         assert_eq!(mods, MOD_CONTROL | MOD_NOREPEAT);
+    }
+
+    #[test]
+    fn quote_arg_simple() {
+        assert_eq!(quote_arg("hello"), "\"hello\"");
+    }
+
+    #[test]
+    fn quote_arg_trailing_backslash() {
+        // C:\captures\ must not leave the closing quote escaped
+        assert_eq!(quote_arg(r"C:\captures\"), r#""C:\captures\\""#);
+    }
+
+    #[test]
+    fn quote_arg_embedded_quote() {
+        assert_eq!(quote_arg(r#"say "hi""#), r#""say \"hi\"""#);
+    }
+
+    #[test]
+    fn quote_arg_backslash_before_quote() {
+        // backslash before embedded quote must be doubled
+        assert_eq!(quote_arg(r#"a\"b"#), r#""a\\\"b""#);
     }
 }
