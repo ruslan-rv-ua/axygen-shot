@@ -165,20 +165,6 @@ pub struct CliArgs {
     #[arg(long)]
     pub list_windows: bool,
 
-    /// Init: pre-fill process in shot.toml
-    #[arg(long, requires = "init")]
-    pub init_process: Option<String>,
-
-    /// Init: pre-fill title in shot.toml
-    #[arg(long, requires = "init")]
-    pub init_title: Option<String>,
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-pub enum ClipboardMode {
-    Path,
-    Image,
-    Both,
 }
 
 pub enum Mode {
@@ -191,13 +177,24 @@ pub enum Mode {
 }
 ```
 
-**Note on --init flags:** PRD stories 14 specify `--init --process=myapp.exe` and `--init --title="MyApp"`. However, `--process` and `--title` are already defined as capture flags. To avoid ambiguity, use `--init` combined with existing `--process`/`--title` flags. During `--init` mode, these values are written to the template rather than used for capture. No separate `--init-process`/`--init-title` flags needed — remove from the struct above and reuse `--process`/`--title`.
+**Note on --init flags:** PRD stories 14 specify `--init --process=myapp.exe` and `--init --title="MyApp"`. The existing `--process` and `--title` flags are reused: during `--init` mode, their values are written to the template instead of being used for capture. No separate `--init-process`/`--init-title` flags needed.
+
+**Note on ClipboardMode:** The `ClipboardMode` enum is defined in `config.rs` (canonical location) and re-exported. `cli.rs` imports it from `config` for the clap `ValueEnum` derive. This avoids circular dependencies.
 
 ### config.rs
 
 ```rust
 use serde::Deserialize;
 use std::path::PathBuf;
+
+/// Canonical definition — imported by cli.rs for clap ValueEnum derive
+#[derive(Clone, Copy, Default, Deserialize)]
+pub enum ClipboardMode {
+    #[default]
+    Path,
+    Image,
+    Both,
+}
 
 #[derive(Deserialize)]
 pub struct TomlConfig {
@@ -391,10 +388,6 @@ pub fn resolve(
 /// - Invisible windows (WS_VISIBLE not set)
 /// - Shell windows (Shell_TrayWnd, Progman class names)
 pub fn list_all(enumerator: &dyn WindowEnumerator) -> Vec<WindowInfo>;
-
-/// Sanitize a string for use in filenames.
-/// Replaces : \ / * ? " < > | with -
-pub fn sanitize_for_filename(s: &str) -> String;
 ```
 
 Title matching: case-insensitive, substring match anywhere in window title (PRD story 3).
@@ -524,7 +517,7 @@ Both use `MessageBeep`. Fire-and-forget — errors are silently ignored.
 3. Generate template with inline comments
 4. If --process or --title provided, uncomment and fill those lines
 5. Write shot.toml to CWD
-6. Append "screenshots/" to .gitignore (create if needed)
+6. Append "screenshots/" to .gitignore (create if needed, skip if line already exists)
 7. Print status to stdout
 ```
 
@@ -656,6 +649,11 @@ fn main() {
 - save() creates directory if absent (tempdir)
 - save() writes valid PNG bytes to correct path
 - Two saves with same timestamp don't panic (different labels or overwrite)
+
+**errors.rs tests:**
+- `format_error` output contains all three fields: `status: error`, `code:`, `message:`
+- `format_success` output contains all four fields: `status: ok`, `file:`, `window:`, `size:`
+- Error code strings match PRD codes (`window-not-found`, `window-minimized`, etc.)
 
 ### Integration Tests (tests/ directory)
 
