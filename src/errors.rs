@@ -57,7 +57,9 @@ pub fn format_error(err: &ShotError) -> String {
 pub fn format_error_message(err: &ShotError) -> String {
     match err {
         ShotError::WindowNotFound(s) => format!("Window not found: {}", s),
-        ShotError::WindowMinimized => "Target window is minimized. Restore it and try again.".into(),
+        ShotError::WindowMinimized => {
+            "Target window is minimized. Restore it and try again.".into()
+        }
         ShotError::CaptureFailed(s) => format!("Capture failed: {}", s),
         ShotError::StorageFailed(s) => format!("Could not save screenshot: {}", s),
         ShotError::ClipboardError(s) => format!("Clipboard error: {}", s),
@@ -172,10 +174,19 @@ mod tests {
     #[test]
     fn format_error_message_returns_human_readable() {
         let cases = vec![
-            (ShotError::WindowNotFound("test".into()), "Window not found: test"),
-            (ShotError::WindowMinimized, "Target window is minimized. Restore it and try again."),
+            (
+                ShotError::WindowNotFound("test".into()),
+                "Window not found: test",
+            ),
+            (
+                ShotError::WindowMinimized,
+                "Target window is minimized. Restore it and try again.",
+            ),
             (ShotError::CaptureFailed("x".into()), "Capture failed: x"),
-            (ShotError::StorageFailed("x".into()), "Could not save screenshot: x"),
+            (
+                ShotError::StorageFailed("x".into()),
+                "Could not save screenshot: x",
+            ),
             (ShotError::ClipboardError("x".into()), "Clipboard error: x"),
             (ShotError::ConfigError("x".into()), "Configuration error: x"),
             (ShotError::ArgError("x".into()), "Argument error: x"),

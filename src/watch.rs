@@ -1,7 +1,7 @@
 use crate::config::CaptureConfig;
 use crate::errors::ShotError;
-use crate::{audio, capture, clipboard, errors, storage, window_resolver};
 use crate::window_resolver::Win32Enumerator;
+use crate::{audio, capture, clipboard, errors, storage, window_resolver};
 
 use std::ffi::OsString;
 use std::mem;
@@ -22,8 +22,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, GetCursorPos, GetMessageW, HWND_MESSAGE, IDI_APPLICATION, LoadIconW,
     MB_ICONERROR, MENU_ITEM_FLAGS, MESSAGEBOX_STYLE, MSG, MessageBoxW, PostMessageW,
     PostQuitMessage, RegisterClassExW, SetForegroundWindow, TPM_RIGHTALIGN, TrackPopupMenu,
-    TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW, WM_APP, WM_COMMAND, WM_HOTKEY,
-    WM_NULL, WM_RBUTTONUP,
+    TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_COMMAND, WM_HOTKEY, WM_NULL,
+    WM_RBUTTONUP, WNDCLASSEXW,
 };
 use windows::core::{PCWSTR, PWSTR, w};
 
@@ -66,18 +66,18 @@ pub fn parse_hotkey(s: &str) -> Result<(u32, u32), ShotError> {
             "alt" => modifiers |= MOD_ALT,
             key => {
                 if vk.is_some() {
-                    return Err(ShotError::ArgError(
-                        format!("Invalid hotkey '{}': multiple keys specified", s),
-                    ));
+                    return Err(ShotError::ArgError(format!(
+                        "Invalid hotkey '{}': multiple keys specified",
+                        s
+                    )));
                 }
                 vk = Some(parse_vk(key, s)?);
             }
         }
     }
 
-    let vk = vk.ok_or_else(|| {
-        ShotError::ArgError(format!("Invalid hotkey '{}': no key specified", s))
-    })?;
+    let vk =
+        vk.ok_or_else(|| ShotError::ArgError(format!("Invalid hotkey '{}': no key specified", s)))?;
 
     if modifiers == 0 {
         return Err(ShotError::ArgError(format!(
@@ -93,12 +93,11 @@ fn parse_vk(key: &str, full_hotkey: &str) -> Result<u32, ShotError> {
     let lower = key.to_lowercase();
 
     // F1–F24
-    if lower.starts_with('f') {
-        if let Ok(n) = lower[1..].parse::<u32>() {
-            if (1..=24).contains(&n) {
-                return Ok(0x6F + n); // VK_F1 = 0x70
-            }
-        }
+    if let Some(rest) = lower.strip_prefix('f')
+        && let Ok(n) = rest.parse::<u32>()
+        && (1..=24).contains(&n)
+    {
+        return Ok(0x6F + n); // VK_F1 = 0x70
     }
 
     // Single character: A–Z or 0–9
@@ -178,9 +177,12 @@ fn launch_daemon() -> Result<u32, ShotError> {
     }
     let mut cmd_wide: Vec<u16> = cmd_line.encode_wide().chain(std::iter::once(0)).collect();
 
-    let flags = PROCESS_CREATION_FLAGS(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW);
-    let mut si = STARTUPINFOW::default();
-    si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
+    let flags =
+        PROCESS_CREATION_FLAGS(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW);
+    let si = STARTUPINFOW {
+        cb: std::mem::size_of::<STARTUPINFOW>() as u32,
+        ..Default::default()
+    };
     let mut pi = PROCESS_INFORMATION::default();
 
     unsafe {
@@ -229,7 +231,10 @@ fn run_daemon(cfg: &CaptureConfig) -> Result<(), ShotError> {
             PCWSTR(class_name.as_ptr()),
             PCWSTR::null(),
             WINDOW_STYLE::default(),
-            0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
             Some(HWND_MESSAGE),
             None,
             None,
@@ -238,13 +243,16 @@ fn run_daemon(cfg: &CaptureConfig) -> Result<(), ShotError> {
     };
     let hwnd = match hwnd {
         Ok(h) if !h.0.is_null() => h,
-        _ => return Err(ShotError::HotkeyError("Cannot create message window".into())),
+        _ => {
+            return Err(ShotError::HotkeyError(
+                "Cannot create message window".into(),
+            ));
+        }
     };
 
     // Register global hotkey
-    let hotkey_result = unsafe {
-        RegisterHotKey(Some(hwnd), HOTKEY_ID, HOT_KEY_MODIFIERS(modifiers), vk)
-    };
+    let hotkey_result =
+        unsafe { RegisterHotKey(Some(hwnd), HOTKEY_ID, HOT_KEY_MODIFIERS(modifiers), vk) };
     if let Err(e) = hotkey_result {
         message_box(
             &format!(
@@ -254,7 +262,9 @@ fn run_daemon(cfg: &CaptureConfig) -> Result<(), ShotError> {
             "Axygen Shot — Error",
             MB_ICONERROR,
         );
-        unsafe { let _ = DestroyWindow(hwnd); }
+        unsafe {
+            let _ = DestroyWindow(hwnd);
+        }
         return Err(ShotError::HotkeyError(format!(
             "RegisterHotKey failed for '{}': {}",
             cfg.hotkey, e
@@ -277,8 +287,12 @@ fn run_daemon(cfg: &CaptureConfig) -> Result<(), ShotError> {
 
     let tray_ok = unsafe { Shell_NotifyIconW(NIM_ADD, &nid) };
     if !tray_ok.as_bool() {
-        unsafe { let _ = UnregisterHotKey(Some(hwnd), HOTKEY_ID); }
-        unsafe { let _ = DestroyWindow(hwnd); }
+        unsafe {
+            let _ = UnregisterHotKey(Some(hwnd), HOTKEY_ID);
+        }
+        unsafe {
+            let _ = DestroyWindow(hwnd);
+        }
         message_box(
             "Cannot create tray icon. The system tray may not be available.",
             "Axygen Shot — Error",
@@ -333,7 +347,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_COMMAND => {
-            let id = (wparam.0 & 0xFFFF) as usize;
+            let id = wparam.0 & 0xFFFF;
             match id {
                 ID_EXIT => {
                     unsafe { PostQuitMessage(0) };
@@ -353,11 +367,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 fn do_capture(cfg: &CaptureConfig) {
     let result = (|| -> Result<(), ShotError> {
         let enumerator = Win32Enumerator;
-        let window = window_resolver::resolve(
-            &enumerator,
-            cfg.process.as_deref(),
-            cfg.title.as_deref(),
-        )?;
+        let window =
+            window_resolver::resolve(&enumerator, cfg.process.as_deref(), cfg.title.as_deref())?;
         let capture_result = capture::capture_window(window.hwnd)?;
         let saved = storage::save(
             &capture_result.png_bytes,
@@ -413,15 +424,25 @@ fn restart() {
             cmd_line.push(quote_arg(&arg).as_str());
         }
         let mut cmd_wide: Vec<u16> = cmd_line.encode_wide().chain(std::iter::once(0)).collect();
-        let flags = PROCESS_CREATION_FLAGS(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW);
-        let mut si = STARTUPINFOW::default();
-        si.cb = mem::size_of::<STARTUPINFOW>() as u32;
+        let flags =
+            PROCESS_CREATION_FLAGS(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW);
+        let si = STARTUPINFOW {
+            cb: mem::size_of::<STARTUPINFOW>() as u32,
+            ..Default::default()
+        };
         let mut pi = PROCESS_INFORMATION::default();
         unsafe {
             let _ = CreateProcessW(
                 None,
                 Some(PWSTR(cmd_wide.as_mut_ptr())),
-                None, None, false, flags, None, None, &si, &mut pi,
+                None,
+                None,
+                false,
+                flags,
+                None,
+                None,
+                &si,
+                &mut pi,
             );
             let _ = windows::Win32::Foundation::CloseHandle(pi.hProcess);
             let _ = windows::Win32::Foundation::CloseHandle(pi.hThread);

@@ -117,7 +117,9 @@ pub fn merge(
             .unwrap_or_default()
     });
 
-    let hotkey = cli.hotkey.clone()
+    let hotkey = cli
+        .hotkey
+        .clone()
         .or(toml_config.as_ref().and_then(|t| t.hotkey.clone()))
         .unwrap_or_else(|| "Win+F12".to_string());
 
@@ -531,8 +533,7 @@ mod tests {
         let toml_str = "process = \"x.exe\"\nhotkey = \"Ctrl+F5\"";
         let toml_config: TomlConfig = toml::from_str(toml_str).unwrap();
         let cli = CliArgs::parse_from(["shot"]);
-        let cfg = merge(&cli, Some((toml_config, PathBuf::from("."))))
-            .unwrap();
+        let cfg = merge(&cli, Some((toml_config, PathBuf::from(".")))).unwrap();
         assert_eq!(cfg.hotkey, "Ctrl+F5");
     }
 
@@ -541,8 +542,7 @@ mod tests {
         let toml_str = "process = \"x.exe\"\nhotkey = \"Ctrl+F5\"";
         let toml_config: TomlConfig = toml::from_str(toml_str).unwrap();
         let cli = CliArgs::parse_from(["shot", "--hotkey=Win+F11"]);
-        let cfg = merge(&cli, Some((toml_config, PathBuf::from("."))))
-            .unwrap();
+        let cfg = merge(&cli, Some((toml_config, PathBuf::from(".")))).unwrap();
         assert_eq!(cfg.hotkey, "Win+F11");
     }
 }
