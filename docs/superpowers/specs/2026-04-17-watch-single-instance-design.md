@@ -35,9 +35,10 @@ When `run_daemon` starts, it calls:
 CreateMutexW(NULL, bInitialOwner=TRUE, "Global\\axygen-shot-daemon")
 ```
 
-- If `GetLastError() == ERROR_ALREADY_EXISTS` → daemon signals the err event (if available) and exits cleanly. No `MessageBoxW`.
-- The mutex handle is held for the lifetime of the daemon process. Windows releases it automatically on process exit.
-- `"Global\\"` prefix ensures the mutex is visible across sessions (Terminal Server / Fast User Switching safe).
+- Call `GetLastError()` **immediately in the same `unsafe` block**, before any other Win32 call. Any intervening call may overwrite the last-error slot.
+- If `GetLastError() == ERROR_ALREADY_EXISTS` **or** `== ERROR_ACCESS_DENIED` → treat as "daemon already running" (the `ACCESS_DENIED` case occurs when a non-elevated caller tries to create a mutex already held by an elevated process). Daemon signals the err event (if available) and exits cleanly. No `MessageBoxW`.
+- The mutex handle is held for the lifetime of the daemon process. Windows releases it automatically on process exit (crash or clean shutdown — the kernel object is destroyed when the last handle closes, so no "abandoned mutex" scenario).
+- `"Global\\"` prefix means cross-session mutual exclusion: only one daemon runs system-wide regardless of Windows session. This is intentional — on a single machine, one daemon is sufficient. On a multi-user RDS/TS server, user B cannot run a daemon while user A's is active. Acceptable trade-off for a developer tool.
 
 #### 2. Named Events — startup feedback to parent
 
@@ -64,13 +65,30 @@ Both event handles are closed after the wait.
 **Daemon side** (in `run_daemon`):
 
 ```rust
-parent_pid = cfg.daemon_parent_pid  // from --daemon-parent-pid arg
+parent_pid = // from --daemon-parent-pid=N arg (passed to run_daemon, not via CaptureConfig)
 ok_event  = OpenEventW(EVENT_MODIFY_STATE, FALSE, "Local\\axygen-shot-ok-{parent_pid}")
 err_event = OpenEventW(EVENT_MODIFY_STATE, FALSE, "Local\\axygen-shot-err-{parent_pid}")
 // Both may be NULL (e.g., Restart path) — handled gracefully
 ```
 
-The daemon calls `signal_ok(ok_event)` or `signal_err(err_event, message)` at each exit point. If the handle is `NULL`, the call is a no-op.
+The daemon calls `signal_ok(ok_event)` or `signal_err_or_popup(err_event, parent_pid, message)` at each exit point. If the handle is `NULL` (restart path), `signal_ok` is a no-op and `signal_err_or_popup` falls back to `MessageBoxW`.
+
+**MessageBoxW policy:** `signal_err` and `MessageBoxW` are mutually exclusive per path:
+
+```rust
+fn signal_err_or_popup(event: HANDLE, parent_pid: Option<u32>, msg: &str) {
+    if parent_pid.is_some() {
+        // Normal start: parent is waiting — communicate via event + temp file.
+        // Do NOT call MessageBoxW (would block and risk parent timeout).
+        write_temp_file_and_signal(event, msg);
+    } else {
+        // Restart path: no parent process — MessageBoxW is the only feedback channel.
+        message_box(msg, "Axygen Shot — Error", MB_ICONERROR);
+    }
+}
+```
+
+All existing `MessageBoxW` calls in `run_daemon` (RegisterHotKey failure, tray failure, mutex failure) are replaced with `signal_err_or_popup`.
 
 #### 3. Error message passing — temp file
 
@@ -84,11 +102,19 @@ Content: single line with the error message (UTF-8). The parent reads and delete
 
 #### 4. Internal CLI arg `--daemon-parent-pid`
 
-`launch_daemon` appends `--daemon-parent-pid {pid}` to the reconstructed command line. This arg is:
+`launch_daemon` appends `--daemon-parent-pid={pid}` (single-token `=` form) to the reconstructed command line. This arg is:
 
 - Parsed by `cli.rs` with `hide = true` (invisible in `--help`).
-- Stored in `CaptureConfig` as `daemon_parent_pid: Option<u32>`.
-- Filtered out in `restart()` — the `restart` function skips any arg that starts with `--daemon-parent-pid` when reconstructing the command line.
+- Stored in `CliArgs` as `daemon_parent_pid: Option<u32>` — **not** in `CaptureConfig`.
+- Filtered out in `restart()` using `starts_with("--daemon-parent-pid")` — the single-token `=` form ensures this predicate removes the whole arg without leaving an orphaned value.
+
+`daemon_parent_pid` is **not** added to `CaptureConfig`. It is IPC lifecycle plumbing, not capture configuration. Instead, `watch::run` reads it from `CliArgs` before calling `run_daemon`, and passes it explicitly:
+
+```rust
+pub fn run(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError>
+```
+
+`run_daemon` receives it as a second parameter and uses it only for event signaling. `CaptureConfig`, `merge()`, and `do_capture()` remain unaware of IPC.
 
 **Why not an env var?** `CreateProcessW` with `lpEnvironment = NULL` inherits the parent environment. A daemon restarting via the tray would pass the env var to the new daemon, which would incorrectly try to open stale event handles. The CLI arg approach requires explicit filtering in `restart()` but is more deterministic.
 
@@ -101,9 +127,9 @@ Content: single line with the error message (UTF-8). The parent reads and delete
 | Normal first start | `signal_ok` | `status: ok\nwatch: started (PID …)` |
 | Mutex already exists (double launch) | write temp file, `signal_err` | `status: error\ncode: watch-already-running\nmessage: daemon is already running` |
 | `RegisterHotKey` fails | write temp file, `signal_err` | `status: error\ncode: hotkey-error\nmessage: …` |
-| `Shell_NotifyIconW` fails | write temp file, `signal_err` | `status: error\ncode: hotkey-error\nmessage: …` |
+| `Shell_NotifyIconW` fails | write temp file, `signal_err` | `status: error\ncode: tray-error\nmessage: …` |
 | Daemon crashes / timeout | — | `status: error\ncode: timeout\nmessage: daemon did not respond within 3s` |
-| Restart (no parent waiting) | `OpenEventW` returns NULL, no-op | *(no parent process)* |
+| Restart failure (no parent waiting) | `MessageBoxW` (no parent) | *(no parent process)* |
 
 ---
 
@@ -149,7 +175,7 @@ parent2                         daemon2
 
 - `--once` flag (separate feature, separate spec).
 - Multiple daemons per user session (deliberately prevented by this design).
-- Cross-user daemon detection (`"Global\\"` mutex handles this implicitly).
+- Cross-user daemon detection (`"Global\\"` mutex enforces system-wide single instance; on RDS/TS servers user B cannot start a daemon while user A's is active — acceptable trade-off for a developer tool).
 
 ---
 
@@ -157,6 +183,6 @@ parent2                         daemon2
 
 | File | Change |
 |---|---|
-| `src/watch.rs` | Add mutex creation, event signaling, `signal_ok`/`signal_err` helpers, update `launch_daemon` to create/wait events, update `restart` to strip `--daemon-parent-pid` |
+| `src/watch.rs` | Add mutex creation, `signal_err_or_popup`/`signal_ok` helpers, update `launch_daemon` to create/wait events (and append `--daemon-parent-pid={pid}`), update `restart` to strip `--daemon-parent-pid=…`, update `run_daemon` signature to accept `parent_pid: Option<u32>` |
 | `src/cli.rs` | Add `daemon_parent_pid: Option<u32>` with `hide = true` |
-| `src/config.rs` | Add `daemon_parent_pid: Option<u32>` to `CaptureConfig`, propagate from `CliArgs` |
+| `src/main.rs` | Read `args.daemon_parent_pid` and pass to `watch::run(cfg, parent_pid)` |
