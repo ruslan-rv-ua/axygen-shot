@@ -5,10 +5,12 @@ Refer to CLAUDE.md for full details. Key commands:
 ## Quick Reference
 
 ```
-Build:  cargo build
-Test:   cargo test
-Lint:   cargo clippy -- -D warnings
-Format: cargo fmt -- --check
+Build fast: just build-fast
+Build min:  just build
+Test:       just test
+Lint:       just lint
+Format:     just fmt-check
+CI:         just ci
 ```
 
 ## Module Map

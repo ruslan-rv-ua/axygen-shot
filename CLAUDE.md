@@ -3,11 +3,14 @@
 ## Build / Test / Lint
 
 ```
-cargo build                          # debug build
-cargo build --release                # release build (LTO + strip)
-cargo test                           # all unit + integration tests
-cargo clippy -- -D warnings          # lint (zero warnings policy)
-cargo fmt -- --check                 # format check
+just build-fast                      # fast debug build
+just build                           # release build, minimum exe size
+just test                            # all unit + integration tests
+just lint                            # clippy (zero warnings policy)
+just fmt-check                       # format check
+just ci                              # lint + fmt-check + test
+just size                            # build + show binary size
+just run -- --list-windows           # run with args
 ```
 
 ## Project structure
