@@ -25,6 +25,7 @@ pub struct TomlConfig {
     pub folder: String,
     #[serde(default)]
     pub clipboard: ClipboardMode,
+    #[allow(dead_code)]
     pub hotkey: Option<String>,
 }
 
@@ -218,6 +219,7 @@ pub struct CaptureConfig {
     pub clipboard: ClipboardMode,
     pub label: Option<String>,
     pub quiet: bool,
+    #[allow(dead_code)]
     pub verbose: bool,
     pub project_root: PathBuf,
 }

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 pub struct SavedFile {
     pub path: PathBuf,
+    #[allow(dead_code)]
     pub filename: String,
 }
 
