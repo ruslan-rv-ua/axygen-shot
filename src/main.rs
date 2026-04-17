@@ -31,9 +31,13 @@ fn run() -> Result<(), ShotError> {
         cli::Mode::Check => run_check(&args),
         cli::Mode::ListWindows => run_list_windows(),
         cli::Mode::Capture => run_capture(&args),
-        cli::Mode::Watch => Err(ShotError::ArgError(
-            "--watch is not available in Phase 1".into(),
-        )),
+        cli::Mode::Watch => {
+            let cwd = std::env::current_dir()
+                .map_err(|e| ShotError::ConfigError(format!("Cannot determine CWD: {}", e)))?;
+            let toml = config::find_config(&cwd)?;
+            let cfg = config::merge(&args, toml)?;
+            watch::run(&cfg)
+        }
     }
 }
 
