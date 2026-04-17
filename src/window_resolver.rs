@@ -80,16 +80,14 @@ pub fn list_all(enumerator: &dyn WindowEnumerator) -> Vec<WindowInfo> {
         .collect()
 }
 
+/// Live Win32 window enumerator using `EnumWindows` and related APIs.
 pub struct Win32Enumerator;
 
 impl WindowEnumerator for Win32Enumerator {
     fn enumerate(&self) -> Vec<WindowInfo> {
         let mut windows: Vec<WindowInfo> = Vec::new();
         unsafe {
-            let _ = EnumWindows(
-                Some(enum_callback),
-                LPARAM(&mut windows as *mut Vec<WindowInfo> as isize),
-            );
+            let _ = EnumWindows(Some(enum_callback), LPARAM(&raw mut windows as isize));
         }
         windows
     }
@@ -106,6 +104,8 @@ impl WindowEnumerator for Win32Enumerator {
     }
 }
 
+// Safety: Panic here aborts (Edition 2024 extern "system" semantics).
+// This is acceptable — OOM during enumeration is unrecoverable.
 unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
     let windows = unsafe { &mut *(lparam.0 as *mut Vec<WindowInfo>) };
 
@@ -114,7 +114,7 @@ unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> windows::
     }
 
     let title_len = unsafe { GetWindowTextLengthW(hwnd) };
-    if title_len == 0 {
+    if title_len <= 0 {
         return TRUE;
     }
     let mut title_buf = vec![0u16; (title_len + 1) as usize];
@@ -169,7 +169,7 @@ fn get_process_name(pid: u32) -> Option<String> {
         let path = OsString::from_wide(&buf[..size as usize])
             .to_string_lossy()
             .to_string();
-        path.rsplit('\\').next().map(|s| s.to_string())
+        path.rsplit('\\').next().map(ToString::to_string)
     }
 }
 
