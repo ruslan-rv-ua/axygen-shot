@@ -18,12 +18,12 @@ use windows::Win32::UI::Shell::{
     NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW, Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DispatchMessageW,
-    GetCursorPos, GetMessageW, HWND_MESSAGE, IDI_APPLICATION, LoadIconW, MB_ICONERROR,
-    MENU_ITEM_FLAGS, MESSAGEBOX_STYLE, MSG, MessageBoxW, PostMessageW, PostQuitMessage,
-    RegisterClassExW, SetForegroundWindow, TPM_RIGHTALIGN, TrackPopupMenu, TranslateMessage,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW, WM_APP, WM_COMMAND, WM_HOTKEY, WM_NULL,
-    WM_RBUTTONUP,
+    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
+    DispatchMessageW, GetCursorPos, GetMessageW, HWND_MESSAGE, IDI_APPLICATION, LoadIconW,
+    MB_ICONERROR, MENU_ITEM_FLAGS, MESSAGEBOX_STYLE, MSG, MessageBoxW, PostMessageW,
+    PostQuitMessage, RegisterClassExW, SetForegroundWindow, TPM_RIGHTALIGN, TrackPopupMenu,
+    TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW, WM_APP, WM_COMMAND, WM_HOTKEY,
+    WM_NULL, WM_RBUTTONUP,
 };
 use windows::core::{PCWSTR, PWSTR, w};
 
@@ -254,6 +254,7 @@ fn run_daemon(cfg: &CaptureConfig) -> Result<(), ShotError> {
             "Axygen Shot — Error",
             MB_ICONERROR,
         );
+        unsafe { let _ = DestroyWindow(hwnd); }
         return Err(ShotError::HotkeyError(format!(
             "RegisterHotKey failed for '{}': {}",
             cfg.hotkey, e
@@ -277,6 +278,7 @@ fn run_daemon(cfg: &CaptureConfig) -> Result<(), ShotError> {
     let tray_ok = unsafe { Shell_NotifyIconW(NIM_ADD, &nid) };
     if !tray_ok.as_bool() {
         unsafe { let _ = UnregisterHotKey(Some(hwnd), HOTKEY_ID); }
+        unsafe { let _ = DestroyWindow(hwnd); }
         message_box(
             "Cannot create tray icon. The system tray may not be available.",
             "Axygen Shot — Error",
