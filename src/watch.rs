@@ -76,7 +76,7 @@ fn parse_vk(key: &str, full_hotkey: &str) -> Result<u32, ShotError> {
     match lower.as_str() {
         "printscreen" | "prtsc" => Ok(0x2C), // VK_SNAPSHOT
         _ => Err(ShotError::ArgError(format!(
-            "Invalid hotkey key '{}' in '{}'. Valid: F1-F24, A-Z, 0-9, PrintScreen",
+            "Invalid hotkey key '{}' in '{}' — valid keys: F1-F24, A-Z, 0-9, PrintScreen",
             key, full_hotkey,
         ))),
     }
@@ -182,6 +182,6 @@ mod tests {
     #[test]
     fn control_alias() {
         let (mods, _) = parse_hotkey("Control+F1").unwrap();
-        assert_eq!(mods & MOD_CONTROL, MOD_CONTROL);
+        assert_eq!(mods, MOD_CONTROL | MOD_NOREPEAT);
     }
 }
