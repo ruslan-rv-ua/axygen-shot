@@ -130,7 +130,7 @@ Window procedure handles:
 | `WM_HOTKEY` | If not capturing: set `capturing = true`, run capture pipeline, play sound, set `capturing = false`. If already capturing: `MessageBeep(MB_ICONQUESTION)` (busy sound). |
 | `WM_APP + 1` (tray callback) | If `lParam == WM_RBUTTONUP`: show context menu at cursor position |
 | `WM_COMMAND` + `ID_EXIT` (1001) | `PostQuitMessage(0)` |
-| `WM_COMMAND` + `ID_RESTART` (1002) | Re-launch self with same args using `DETACHED_PROCESS \| CREATE_NO_WINDOW` (spawns new daemon directly), then `PostQuitMessage(0)` |
+| `WM_COMMAND` + `ID_RESTART` (1002) | Re-launch self with same args using `CREATE_NEW_PROCESS_GROUP \| DETACHED_PROCESS \| CREATE_NO_WINDOW` (spawns new daemon directly), then `PostQuitMessage(0)` |
 | `WM_DESTROY` | Cleanup: `Shell_NotifyIcon(NIM_DELETE)`, `UnregisterHotKey` |
 
 #### Capture Pipeline (in daemon)
@@ -397,10 +397,13 @@ pub fn format_error_message(err: &ShotError) -> String {
         ShotError::ClipboardError(s) => format!("Clipboard error: {}", s),
         ShotError::ConfigError(s) => format!("Configuration error: {}", s),
         ShotError::ArgError(s) => format!("Argument error: {}", s),
+        ShotError::InitError(s) => format!("Init error: {}", s),
         ShotError::HotkeyError(s) => format!("Hotkey error: {}", s),
     }
 }
 ```
+
+Note: `do_capture` pseudo-code uses simplified call signatures for readability. Implementers should match the actual function signatures from Phase 1 source code.
 
 ### `Cargo.toml`
 
