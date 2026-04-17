@@ -33,18 +33,39 @@ pub fn capture_window(hwnd: isize) -> Result<CaptureResult, ShotError> {
         GetWindowRect(hwnd, &mut rect)
             .map_err(|e| ShotError::CaptureFailed(format!("GetWindowRect failed: {}", e)))?;
 
-        let width = (rect.right - rect.left) as u32;
-        let height = (rect.bottom - rect.top) as u32;
+        let w = rect.right - rect.left;
+        let h = rect.bottom - rect.top;
 
-        if width == 0 || height == 0 {
+        if w <= 0 || h <= 0 {
             return Err(ShotError::CaptureFailed(
-                "Window has zero dimensions".into(),
+                "Window has zero or negative dimensions".into(),
+            ));
+        }
+        let width = w as u32;
+        let height = h as u32;
+
+        let screen_dc = GetWindowDC(Some(hwnd));
+        if screen_dc.0.is_null() {
+            return Err(ShotError::CaptureFailed("GetWindowDC returned null".into()));
+        }
+
+        let mem_dc = CreateCompatibleDC(Some(screen_dc));
+        if mem_dc.0.is_null() {
+            ReleaseDC(Some(hwnd), screen_dc);
+            return Err(ShotError::CaptureFailed(
+                "CreateCompatibleDC returned null".into(),
             ));
         }
 
-        let screen_dc = GetWindowDC(Some(hwnd));
-        let mem_dc = CreateCompatibleDC(Some(screen_dc));
         let bitmap = CreateCompatibleBitmap(screen_dc, width as i32, height as i32);
+        if bitmap.0.is_null() {
+            let _ = DeleteDC(mem_dc);
+            ReleaseDC(Some(hwnd), screen_dc);
+            return Err(ShotError::CaptureFailed(
+                "CreateCompatibleBitmap returned null".into(),
+            ));
+        }
+
         let old_obj = SelectObject(mem_dc, bitmap.into());
 
         let print_result = PrintWindow(hwnd, mem_dc, PW_RENDERFULLCONTENT);
@@ -86,7 +107,11 @@ pub fn capture_window(hwnd: isize) -> Result<CaptureResult, ShotError> {
             ..mem::zeroed()
         };
 
-        let mut pixels = vec![0u8; (width * height * 4) as usize];
+        let buf_size = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|n| n.checked_mul(4))
+            .ok_or_else(|| ShotError::CaptureFailed("Window too large for capture".into()))?;
+        let mut pixels = vec![0u8; buf_size];
         let lines = GetDIBits(
             mem_dc,
             bitmap,
