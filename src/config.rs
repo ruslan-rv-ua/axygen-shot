@@ -219,7 +219,6 @@ pub struct CaptureConfig {
     pub clipboard: ClipboardMode,
     pub label: Option<String>,
     pub quiet: bool,
-    #[allow(dead_code)]
     pub verbose: bool,
     pub project_root: PathBuf,
 }

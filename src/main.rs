@@ -118,7 +118,7 @@ fn run_capture(args: &cli::CliArgs) -> Result<(), ShotError> {
 
     audio::play_success();
 
-    if !cfg.quiet {
+    if !cfg.quiet || cfg.verbose {
         println!(
             "{}",
             errors::format_success(
