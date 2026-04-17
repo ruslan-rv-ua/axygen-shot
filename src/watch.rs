@@ -6,11 +6,14 @@ use crate::{audio, capture, clipboard, errors, storage, window_resolver};
 use std::ffi::OsString;
 use std::mem;
 use std::os::windows::ffi::OsStrExt;
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
+use windows::Win32::Foundation::{
+    ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS, HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM,
+};
 use windows::Win32::System::Console::GetConsoleWindow;
 use windows::Win32::System::Threading::{
-    CreateEventW, CreateProcessW, GetCurrentProcessId, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
-    STARTUPINFOW, WaitForMultipleObjects,
+    CreateEventW, CreateMutexW, CreateProcessW, EVENT_MODIFY_STATE, GetCurrentProcessId,
+    OpenEventW, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION, STARTUPINFOW, SetEvent,
+    WaitForMultipleObjects,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
@@ -54,7 +57,6 @@ fn temp_file_path(parent_pid: u32) -> std::path::PathBuf {
     path
 }
 
-#[allow(dead_code)]
 fn write_temp_file(parent_pid: u32, code: &str, message: &str) {
     let path = temp_file_path(parent_pid);
     let _ = std::fs::write(&path, format!("{}\n{}", code, message));
@@ -280,10 +282,94 @@ fn launch_daemon(parent_pid: u32) -> Result<u32, ShotError> {
     }
 }
 
+/// Opens the parent's ok/err named events (if `parent_pid` is set).
+/// Returns `(ok_event, err_event)` — both will be null if no parent.
+fn open_parent_events(parent_pid: Option<u32>) -> (HANDLE, HANDLE) {
+    let pid = match parent_pid {
+        Some(p) => p,
+        None => return (HANDLE::default(), HANDLE::default()),
+    };
+    let ok_name = wide_string(&format!("Local\\axygen-shot-ok-{pid}"));
+    let err_name = wide_string(&format!("Local\\axygen-shot-err-{pid}"));
+    unsafe {
+        let ok = OpenEventW(
+            EVENT_MODIFY_STATE,
+            false,
+            windows::core::PCWSTR(ok_name.as_ptr()),
+        )
+        .unwrap_or_default();
+        let err = OpenEventW(
+            EVENT_MODIFY_STATE,
+            false,
+            windows::core::PCWSTR(err_name.as_ptr()),
+        )
+        .unwrap_or_default();
+        (ok, err)
+    }
+}
+
+/// Signals the parent's ok event (no-op if handle is null).
+fn signal_ok(ok_event: HANDLE) {
+    if !ok_event.0.is_null() {
+        unsafe {
+            let _ = SetEvent(ok_event);
+        }
+    }
+}
+
+/// Writes the error to a temp file, signals the err event, then exits.
+/// Falls back to a message box when there is no parent (manual or restart path).
+fn handle_startup_err(err_event: HANDLE, parent_pid: Option<u32>, err: &ShotError) {
+    if let Some(pid) = parent_pid {
+        write_temp_file(pid, err.code(), &errors::format_error_message(err));
+        if !err_event.0.is_null() {
+            unsafe {
+                let _ = SetEvent(err_event);
+            }
+        }
+        std::process::exit(1);
+    } else {
+        message_box(
+            &errors::format_error_message(err),
+            "Axygen Shot — Error",
+            MB_ICONERROR,
+        );
+    }
+}
+
 fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
-    let _ = parent_pid;
+    let (ok_event, err_event) = open_parent_events(parent_pid);
+
+    // Single-instance guard: only one daemon may run system-wide.
+    let mutex_name = wide_string("Global\\axygen-shot-daemon");
+    let _mutex_handle = unsafe {
+        match CreateMutexW(None, true, windows::core::PCWSTR(mutex_name.as_ptr())) {
+            Ok(h) => {
+                // Call GetLastError IMMEDIATELY — before any other Win32 call.
+                let last_err = windows::Win32::Foundation::GetLastError();
+                if last_err == ERROR_ALREADY_EXISTS || last_err == ERROR_ACCESS_DENIED {
+                    let err = ShotError::WatchAlreadyRunning;
+                    handle_startup_err(err_event, parent_pid, &err);
+                    return Err(err);
+                }
+                h
+            }
+            Err(e) => {
+                let err = ShotError::HotkeyError(format!("Cannot create instance mutex: {}", e));
+                handle_startup_err(err_event, parent_pid, &err);
+                return Err(err);
+            }
+        }
+    };
+
     // Parse hotkey before creating any windows
-    let (modifiers, vk) = parse_hotkey(&cfg.hotkey)?;
+    let (modifiers, vk) = match parse_hotkey(&cfg.hotkey) {
+        Ok(v) => v,
+        Err(e) => {
+            handle_startup_err(err_event, parent_pid, &e);
+            return Err(e);
+        }
+    };
 
     // Store config pointer for wndproc access (single-threaded daemon, safe)
     unsafe { DAEMON_CFG = Some(cfg as *const CaptureConfig) };
@@ -318,9 +404,9 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
     let hwnd = match hwnd {
         Ok(h) if !h.0.is_null() => h,
         _ => {
-            return Err(ShotError::HotkeyError(
-                "Cannot create message window".into(),
-            ));
+            let err = ShotError::HotkeyError("Cannot create message window".into());
+            handle_startup_err(err_event, parent_pid, &err);
+            return Err(err);
         }
     };
 
@@ -328,21 +414,13 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
     let hotkey_result =
         unsafe { RegisterHotKey(Some(hwnd), HOTKEY_ID, HOT_KEY_MODIFIERS(modifiers), vk) };
     if let Err(e) = hotkey_result {
-        message_box(
-            &format!(
-                "Cannot register hotkey '{}': {}\n\nThe hotkey may be in use by another application.",
-                cfg.hotkey, e
-            ),
-            "Axygen Shot — Error",
-            MB_ICONERROR,
-        );
         unsafe {
             let _ = DestroyWindow(hwnd);
         }
-        return Err(ShotError::HotkeyError(format!(
-            "RegisterHotKey failed for '{}': {}",
-            cfg.hotkey, e
-        )));
+        let err =
+            ShotError::HotkeyError(format!("RegisterHotKey failed for '{}': {}", cfg.hotkey, e));
+        handle_startup_err(err_event, parent_pid, &err);
+        return Err(err);
     }
 
     // Add tray icon
@@ -363,16 +441,25 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
     if !tray_ok.as_bool() {
         unsafe {
             let _ = UnregisterHotKey(Some(hwnd), HOTKEY_ID);
-        }
-        unsafe {
             let _ = DestroyWindow(hwnd);
         }
-        message_box(
-            "Cannot create tray icon. The system tray may not be available.",
-            "Axygen Shot — Error",
-            MB_ICONERROR,
+        let err = ShotError::TrayError(
+            "cannot create tray icon — system tray may not be available".into(),
         );
-        return Err(ShotError::HotkeyError("Shell_NotifyIcon failed".into()));
+        handle_startup_err(err_event, parent_pid, &err);
+        return Err(err);
+    }
+
+    // Signal the parent that daemon started successfully.
+    signal_ok(ok_event);
+    // Close event handles — no longer needed after signaling.
+    unsafe {
+        if !ok_event.0.is_null() {
+            let _ = windows::Win32::Foundation::CloseHandle(ok_event);
+        }
+        if !err_event.0.is_null() {
+            let _ = windows::Win32::Foundation::CloseHandle(err_event);
+        }
     }
 
     // Play startup sound (PRD story 59)
@@ -494,6 +581,9 @@ fn restart() {
         cmd_line.push(exe.as_os_str());
         cmd_line.push("\"");
         for arg in std::env::args().skip(1) {
+            if arg.starts_with("--daemon-parent-pid") {
+                continue; // Internal IPC arg — must not be forwarded to restarted daemon
+            }
             cmd_line.push(" ");
             cmd_line.push(quote_arg(&arg).as_str());
         }

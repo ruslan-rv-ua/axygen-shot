@@ -30,12 +30,9 @@ pub enum ShotError {
     #[error("{0}")]
     HotkeyError(String),
 
-    // Temporary #[allow(dead_code)]: will be removed in Task 6 when these variants are constructed
-    #[allow(dead_code)]
     #[error("daemon is already running")]
     WatchAlreadyRunning,
 
-    #[allow(dead_code)]
     #[error("{0}")]
     TrayError(String),
 
