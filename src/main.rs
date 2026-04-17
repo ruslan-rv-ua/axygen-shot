@@ -5,6 +5,7 @@ mod clipboard;
 mod config;
 mod errors;
 mod storage;
+mod watch;
 mod window_resolver;
 
 use errors::ShotError;
