@@ -77,6 +77,7 @@ Uses `GetConsoleWindow()` from `Win32_System_Console`. When the process has no c
 When `is_detached()` returns `false`:
 
 1. Validate config is complete (process/title present) — if not, print error to stderr and exit
+   - **Design decision (PRD story 32 deviation):** PRD specifies MessageBox for missing config at watch startup. Since the launcher runs in a console, stderr is more appropriate and consistent with CLI mode. The daemon phase uses MessageBox for all errors (no console available).
 2. Re-launch self with same args using `CreateProcessW`:
    - Flags: `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW`
    - Inherits current working directory
@@ -102,6 +103,7 @@ When `is_detached()` returns `true`:
    - Icon: `IDI_APPLICATION` (default system icon)
    - Tooltip: `"shot — watching <process_or_title>"` (max 128 chars per Win32 API)
    - Callback message: `WM_APP + 1`
+   - On failure: `MessageBox` with error text, exit code 1
 5. Play startup sound: `MessageBeep(MB_ICONEXCLAMATION)` — `SystemExclamation`
 6. Enter message loop
 
@@ -128,7 +130,7 @@ Window procedure handles:
 | `WM_HOTKEY` | If not capturing: set `capturing = true`, run capture pipeline, play sound, set `capturing = false`. If already capturing: `MessageBeep(MB_ICONQUESTION)` (busy sound). |
 | `WM_APP + 1` (tray callback) | If `lParam == WM_RBUTTONUP`: show context menu at cursor position |
 | `WM_COMMAND` + `ID_EXIT` (1001) | `PostQuitMessage(0)` |
-| `WM_COMMAND` + `ID_RESTART` (1002) | Re-launch self with same args (as launcher, without `DETACHED_PROCESS` — the new instance will detect console and re-detach), then `PostQuitMessage(0)` |
+| `WM_COMMAND` + `ID_RESTART` (1002) | Re-launch self with same args using `DETACHED_PROCESS \| CREATE_NO_WINDOW` (spawns new daemon directly), then `PostQuitMessage(0)` |
 | `WM_DESTROY` | Cleanup: `Shell_NotifyIcon(NIM_DELETE)`, `UnregisterHotKey` |
 
 #### Capture Pipeline (in daemon)
@@ -137,12 +139,26 @@ On `WM_HOTKEY`, runs the same pipeline as CLI mode but with watch-specific error
 
 ```rust
 fn do_capture(cfg: &CaptureConfig) {
-    match capture_pipeline(cfg) {
-        Ok(output) => audio::play_success(),
+    let result = (|| -> Result<(), ShotError> {
+        let (hwnd, info) = window_resolver::resolve(cfg)?;
+        let capture_result = capture::capture_window(hwnd)?;
+        let label = None; // No per-capture label in watch mode (PRD story 34)
+        let saved = storage::save(&capture_result.png_bytes, cfg, label, &info.title)?;
+        clipboard::write_clipboard(
+            &cfg.clipboard,
+            &saved.path,
+            &capture_result.png_bytes,
+            capture_result.width,
+            capture_result.height,
+        )?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => audio::play_success(),
         Err(e) => {
             audio::play_error();
             let msg = errors::format_error_message(&e);
-            // MessageBox with error (accessible to screen readers)
             message_box(&msg, "Axygen Shot — Error", MB_ICONERROR);
         }
     }
@@ -159,7 +175,9 @@ The capture pipeline reuses existing modules: `window_resolver::resolve()` → `
 
 ```rust
 fn show_context_menu(hwnd: HWND) {
-    let menu = CreatePopupMenu().unwrap();
+    let Ok(menu) = CreatePopupMenu() else {
+        return; // Silently fail — tray icon still works for Exit via other means
+    };
     AppendMenuW(menu, MF_STRING, ID_RESTART, w!("Restart"));
     AppendMenuW(menu, MF_STRING, ID_EXIT, w!("Exit"));
 
@@ -372,7 +390,14 @@ Add `format_error_message()` — returns just the message string (for `MessageBo
 ```rust
 pub fn format_error_message(err: &ShotError) -> String {
     match err {
-        // Returns human-readable message without the key:value format
+        ShotError::WindowNotFound(s) => format!("Window not found: {}", s),
+        ShotError::WindowMinimized => "Target window is minimized. Restore it and try again.".into(),
+        ShotError::CaptureFailed(s) => format!("Capture failed: {}", s),
+        ShotError::StorageFailed(s) => format!("Could not save screenshot: {}", s),
+        ShotError::ClipboardError(s) => format!("Clipboard error: {}", s),
+        ShotError::ConfigError(s) => format!("Configuration error: {}", s),
+        ShotError::ArgError(s) => format!("Argument error: {}", s),
+        ShotError::HotkeyError(s) => format!("Hotkey error: {}", s),
     }
 }
 ```
@@ -452,6 +477,8 @@ Add tests for hotkey merge in `config.rs`:
 - CLI has hotkey, no config → use CLI value
 - Both have hotkey → CLI wins
 - Neither has hotkey → default "Win+F12"
+
+**Note:** Adding `hotkey: String` to `CaptureConfig` will require updating existing test fixtures that construct `CaptureConfig` (there are 7+ tests in `config.rs` that create `CaptureConfig` structs). Each needs a `hotkey` field added.
 
 ## Error Codes
 
