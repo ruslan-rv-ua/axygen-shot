@@ -51,6 +51,10 @@ pub struct CliArgs {
     /// List all visible windows
     #[arg(long)]
     pub list_windows: bool,
+
+    /// Internal: parent PID for watch-mode IPC startup feedback (hidden from --help)
+    #[arg(long, hide = true)]
+    pub daemon_parent_pid: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -176,5 +180,17 @@ mod tests {
         let args = CliArgs::parse_from(["shot", "--verbose", "--quiet"]);
         assert!(args.verbose);
         assert!(args.quiet);
+    }
+
+    #[test]
+    fn daemon_parent_pid_parsed() {
+        let args = CliArgs::parse_from(["shot", "--watch", "--daemon-parent-pid=12345"]);
+        assert_eq!(args.daemon_parent_pid, Some(12345u32));
+    }
+
+    #[test]
+    fn daemon_parent_pid_defaults_none() {
+        let args = CliArgs::parse_from(["shot", "--watch"]);
+        assert_eq!(args.daemon_parent_pid, None);
     }
 }
