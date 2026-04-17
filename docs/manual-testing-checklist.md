@@ -617,6 +617,33 @@ $LASTEXITCODE
 
 ---
 
+## 14. Watch Mode
+
+### 14.1 Базовий запуск
+
+```powershell
+& $shot --watch --process=notepad.exe
+```
+
+| # | Тест | Команда | Очікуваний результат |
+|---|------|---------|---------------------|
+| 1 | Запуск watch mode | `shot --watch --process=notepad.exe` | `status: ok` + PID, термінал повертає промпт |
+| 2 | Tray icon з'являється | (перевірити після запуску) | Іконка в треї, tooltip "shot — watching notepad.exe" |
+| 3 | Hotkey capture | Натиснути Win+F12 | Скріншот збережено, beep успіху |
+| 4 | Capture serialization | Швидко натиснути Win+F12 двічі | Другий натиск — busy sound |
+| 5 | Exit через tray | ПКМ → Exit | Daemon зупиняється, іконка зникає |
+| 6 | Restart через tray | ПКМ → Restart | Daemon перезапускається, нова іконка |
+| 7 | Hotkey override | `shot --watch --process=notepad.exe --hotkey=Win+F11` | Працює Win+F11 замість F12 |
+| 8 | Hotkey conflict | Запустити два --watch з однаковим hotkey | Другий — MessageBox помилки |
+| 9 | Startup sound | Запустити --watch | SystemExclamation при старті |
+| 10 | Quiet mode | `shot --watch --process=notepad.exe --quiet` | Без stdout, daemon працює |
+| 11 | Немає конфігу | `shot --watch` (без shot.toml, без --process/--title) | Помилка в stderr |
+| 12 | hotkey з shot.toml | Створити shot.toml з `hotkey = "Win+F11"` | Працює Win+F11 |
+| 13 | Window not found | Вказати неіснуючий процес, натиснути hotkey | Error beep + MessageBox |
+| 14 | Window minimized | Мінімізувати вікно, натиснути hotkey | Error beep + MessageBox "minimized" |
+
+---
+
 ## Прибирання після тестування
 
 ```powershell
@@ -644,4 +671,5 @@ Remove-Item -Recurse -Force C:\dev\axygen-shot\screenshots -ErrorAction Silently
 | Продуктивність | 2 |
 | Мінімізоване вікно | 4 |
 | Кілька вікон | 1 |
-| **Всього** | **120** |
+| Watch mode | 14 |
+| **Всього** | **134** |

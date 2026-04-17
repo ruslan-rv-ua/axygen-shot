@@ -23,6 +23,7 @@ just run -- --list-windows           # run with args
 - `src/storage.rs` — filename generation, sanitization, file write
 - `src/clipboard.rs` — CF_UNICODETEXT and/or CF_DIB
 - `src/audio.rs` — MessageBeep wrappers
+- `src/watch.rs` — watch mode daemon: hotkey parsing, tray icon, message loop
 - `src/errors.rs` — ShotError enum, format_error/format_success
 
 ## Contracts
@@ -52,3 +53,7 @@ message: <human-readable>
 - GlobalFree and MessageBeep use raw FFI — not exposed in windows crate v0.62
 - windows crate v0.62: some APIs moved (PrintWindow → Xps, CF_DIB → Ole)
 - All modules are stateless — no global mutable state
+- Watch mode daemon detected via GetConsoleWindow() — no console = daemon mode
+- RegisterHotKey requires at least one modifier (Win, Ctrl, Shift, Alt)
+- Tray tooltip max 128 UTF-16 chars (szTip field limit)
+- `[profile.dev]` has `panic = "abort"` to prevent panic UB through extern "system" wndproc

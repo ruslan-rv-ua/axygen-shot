@@ -17,6 +17,8 @@ CI:         just ci
 
 ```
 cli → config → window_resolver → capture → storage → clipboard → audio
+                                                                    ↑
+watch (daemon: hotkey + tray + message loop) ───────────────────────┘
 ```
 
 All modules in `src/`. Each file = one module.
