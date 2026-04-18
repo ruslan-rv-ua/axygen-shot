@@ -1,5 +1,3 @@
-#![windows_subsystem = "windows"]
-
 use axygen_shot::errors::ShotError;
 use axygen_shot::window_resolver::Win32Enumerator;
 use axygen_shot::{
@@ -7,14 +5,6 @@ use axygen_shot::{
 };
 
 fn main() {
-    // Attach to parent console for stdout/stderr when launched from terminal.
-    // No-op when launched from GUI (Explorer, Task Scheduler, shortcuts).
-    unsafe {
-        let _ = windows::Win32::System::Console::AttachConsole(
-            windows::Win32::System::Console::ATTACH_PARENT_PROCESS,
-        );
-    }
-
     match run() {
         Ok(()) => {}
         Err(e) => {
