@@ -237,6 +237,7 @@ clipboard = \"path\"          # \"path\" | \"image\" | \"both\" (default: \"path
 }
 
 /// Merged config — everything needed for a capture operation
+#[derive(Clone)]
 pub struct CaptureConfig {
     pub process: Option<String>,
     pub title: Option<String>,

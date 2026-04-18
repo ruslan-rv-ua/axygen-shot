@@ -24,7 +24,7 @@ pub struct CliArgs {
     #[arg(long, value_enum)]
     pub clipboard: Option<ClipboardMode>,
 
-    /// Watch mode hotkey override (Phase 2)
+    /// Watch mode hotkey override
     #[arg(long)]
     pub hotkey: Option<String>,
 
@@ -40,7 +40,7 @@ pub struct CliArgs {
     #[arg(long)]
     pub init: bool,
 
-    /// Watch mode (Phase 2 — returns error)
+    /// Watch mode
     #[arg(long)]
     pub watch: bool,
 

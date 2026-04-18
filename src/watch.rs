@@ -3,6 +3,7 @@ use crate::errors::ShotError;
 use crate::window_resolver::Win32Enumerator;
 use crate::{audio, capture, clipboard, errors, storage, window_resolver};
 
+use std::cell::Cell;
 use std::ffi::OsString;
 use std::mem;
 use std::os::windows::ffi::OsStrExt;
@@ -23,11 +24,11 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
-    DispatchMessageW, GetCursorPos, GetMessageW, HWND_MESSAGE, IDI_APPLICATION, LoadIconW,
-    MB_ICONERROR, MENU_ITEM_FLAGS, MESSAGEBOX_STYLE, MSG, MessageBoxW, PostMessageW,
-    PostQuitMessage, RegisterClassExW, SetForegroundWindow, TPM_RIGHTALIGN, TrackPopupMenu,
-    TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_COMMAND, WM_HOTKEY, WM_NULL,
-    WM_RBUTTONUP, WNDCLASSEXW,
+    DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW, HWND_MESSAGE,
+    IDI_APPLICATION, LoadIconW, MB_ICONERROR, MENU_ITEM_FLAGS, MESSAGEBOX_STYLE, MSG, MessageBoxW,
+    PostMessageW, PostQuitMessage, RegisterClassExW, SetForegroundWindow, SetWindowLongPtrW,
+    TPM_RIGHTALIGN, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP,
+    WM_COMMAND, WM_HOTKEY, WM_NULL, WM_RBUTTONUP, WNDCLASSEXW,
 };
 use windows::core::{PCWSTR, PWSTR, w};
 
@@ -48,8 +49,10 @@ const ID_EXIT: usize = 1001;
 const ID_RESTART: usize = 1002;
 const HOTKEY_ID: i32 = 1;
 
-static mut DAEMON_CFG: Option<*const CaptureConfig> = None;
-static mut CAPTURING: bool = false;
+struct DaemonState {
+    cfg: CaptureConfig,
+    capturing: Cell<bool>,
+}
 
 fn temp_file_path(parent_pid: u32) -> std::path::PathBuf {
     let mut path = std::env::temp_dir();
@@ -371,8 +374,7 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
         }
     };
 
-    // Store config pointer for wndproc access (single-threaded daemon, safe)
-    unsafe { DAEMON_CFG = Some(cfg as *const CaptureConfig) };
+
 
     // Register window class
     let class_name = wide_string("ShotWatchClass");
@@ -409,6 +411,13 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
             return Err(err);
         }
     };
+
+    // Store daemon state via GWLP_USERDATA for wndproc access
+    let state = Box::new(DaemonState {
+        cfg: cfg.clone(),
+        capturing: Cell::new(false),
+    });
+    unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, Box::into_raw(state) as isize) };
 
     // Register global hotkey
     let hotkey_result =
@@ -480,6 +489,11 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
 
         let _ = Shell_NotifyIconW(NIM_DELETE, &nid);
         let _ = UnregisterHotKey(Some(hwnd), HOTKEY_ID);
+        // Free DaemonState allocated via Box::into_raw
+        let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+        if ptr != 0 {
+            drop(Box::from_raw(ptr as *mut DaemonState));
+        }
     }
 
     Ok(())
@@ -488,15 +502,16 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_HOTKEY => {
-            if unsafe { CAPTURING } {
-                audio::play_busy();
-            } else {
-                unsafe { CAPTURING = true };
-                if let Some(cfg_ptr) = unsafe { DAEMON_CFG } {
-                    let cfg = unsafe { &*cfg_ptr };
-                    do_capture(cfg);
+            let ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) };
+            if ptr != 0 {
+                let state = unsafe { &*(ptr as *const DaemonState) };
+                if state.capturing.get() {
+                    audio::play_busy();
+                } else {
+                    state.capturing.set(true);
+                    do_capture(&state.cfg);
+                    state.capturing.set(false);
                 }
-                unsafe { CAPTURING = false };
             }
             LRESULT(0)
         }
