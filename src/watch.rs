@@ -110,8 +110,9 @@ pub fn parse_hotkey(s: &str) -> Result<(u32, u32), ShotError> {
         }
     }
 
-    let vk =
-        vk.ok_or_else(|| ShotError::HotkeyError(format!("Invalid hotkey '{}': no key specified", s)))?;
+    let vk = vk.ok_or_else(|| {
+        ShotError::HotkeyError(format!("Invalid hotkey '{}': no key specified", s))
+    })?;
 
     if modifiers == 0 {
         return Err(ShotError::HotkeyError(format!(
@@ -375,8 +376,6 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
         }
     };
 
-
-
     // Register window class
     let class_name = wide_string("ShotWatchClass");
     let wc = WNDCLASSEXW {
@@ -535,7 +534,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     if ptr != 0 {
                         let state = unsafe { &*(ptr as *const DaemonState) };
                         // Release mutex BEFORE spawning new daemon to avoid race
-                        unsafe { let _ = windows::Win32::Foundation::CloseHandle(state.mutex_handle); }
+                        unsafe {
+                            let _ = windows::Win32::Foundation::CloseHandle(state.mutex_handle);
+                        }
                     }
                     restart();
                     unsafe { PostQuitMessage(0) };
