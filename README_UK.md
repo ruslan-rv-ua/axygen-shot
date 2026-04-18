@@ -1,8 +1,8 @@
 # Axygen Shot
 
-[![CI](https://github.com/nickolay-kondratyev/axygen-shot/actions/workflows/ci.yml/badge.svg)](https://github.com/nickolay-kondratyev/axygen-shot/actions/workflows/ci.yml)
+[![CI](https://github.com/ruslan-rv-ua/axygen-shot/actions/workflows/ci.yml/badge.svg)](https://github.com/ruslan-rv-ua/axygen-shot/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/nickolay-kondratyev/axygen-shot)](https://github.com/nickolay-kondratyev/axygen-shot/releases/latest)
+[![Release](https://img.shields.io/github/v/release/ruslan-rv-ua/axygen-shot)](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
 
 Портативний CLI-інструмент для Windows, який захоплює вікна застосунків як скріншоти.
 Розроблений насамперед для незрячих розробників, яким потрібен швидкий, клавіатурний
@@ -22,7 +22,7 @@
 ## Встановлення
 
 Завантажте `shot.exe` з
-[останнього релізу](https://github.com/nickolay-kondratyev/axygen-shot/releases/latest)
+[останнього релізу](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
 і помістіть у будь-яку теку, що є у вашому `PATH`.
 
 Вимоги: Windows 10 або новіша (x86-64).
