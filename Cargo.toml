@@ -5,6 +5,10 @@ edition = "2024"
 rust-version = "1.87"
 license = "MIT"
 
+[lib]
+name = "axygen_shot"
+path = "src/lib.rs"
+
 [[bin]]
 name = "shot"
 path = "src/main.rs"

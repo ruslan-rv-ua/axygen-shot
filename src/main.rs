@@ -1,17 +1,10 @@
 #![windows_subsystem = "windows"]
 
-mod audio;
-mod capture;
-mod cli;
-mod clipboard;
-mod config;
-mod errors;
-mod storage;
-mod watch;
-mod window_resolver;
-
-use errors::ShotError;
-use window_resolver::Win32Enumerator;
+use axygen_shot::errors::ShotError;
+use axygen_shot::window_resolver::Win32Enumerator;
+use axygen_shot::{
+    audio, capture, cli, clipboard, config, errors, storage, watch, window_resolver,
+};
 
 fn main() {
     // Attach to parent console for stdout/stderr when launched from terminal.
