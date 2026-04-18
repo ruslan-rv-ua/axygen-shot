@@ -52,6 +52,7 @@ const HOTKEY_ID: i32 = 1;
 struct DaemonState {
     cfg: CaptureConfig,
     capturing: Cell<bool>,
+    mutex_handle: HANDLE,
 }
 
 fn temp_file_path(parent_pid: u32) -> std::path::PathBuf {
@@ -345,7 +346,7 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
 
     // Single-instance guard: only one daemon may run system-wide.
     let mutex_name = wide_string("Global\\axygen-shot-daemon");
-    let _mutex_handle = unsafe {
+    let mutex_handle = unsafe {
         match CreateMutexW(None, true, windows::core::PCWSTR(mutex_name.as_ptr())) {
             Ok(h) => {
                 // Call GetLastError IMMEDIATELY — before any other Win32 call.
@@ -416,6 +417,7 @@ fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotEr
     let state = Box::new(DaemonState {
         cfg: cfg.clone(),
         capturing: Cell::new(false),
+        mutex_handle,
     });
     unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, Box::into_raw(state) as isize) };
 
@@ -529,6 +531,12 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     unsafe { PostQuitMessage(0) };
                 }
                 ID_RESTART => {
+                    let ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) };
+                    if ptr != 0 {
+                        let state = unsafe { &*(ptr as *const DaemonState) };
+                        // Release mutex BEFORE spawning new daemon to avoid race
+                        unsafe { let _ = windows::Win32::Foundation::CloseHandle(state.mutex_handle); }
+                    }
                     restart();
                     unsafe { PostQuitMessage(0) };
                 }
