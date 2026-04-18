@@ -43,7 +43,9 @@ jobs:
       - name: Release build
         run: cargo build --release
 
-      - name: Show binary size
+      - name: Show binary sizes
         run: |
-          $exe = Get-Item target\release\shot.exe
-          Write-Output "shot.exe size: $([math]::Round($exe.Length / 1KB)) KB"
+          foreach ($name in 'shot.exe', 'shot-watch.exe') {
+            $exe = Get-Item "target\release\$name"
+            Write-Output "$name size: $([math]::Round($exe.Length / 1KB)) KB"
+          }

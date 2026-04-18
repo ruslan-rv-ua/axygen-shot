@@ -38,6 +38,8 @@
 | 2 | Exit code | `0` | |
 | 3 | Промпт терміналу повертається одразу | Так | |
 
+> **Примітка:** Це було виправлено переходом на dual binaries, див. [ADR-002](../docs/ADR-002-dual-binaries.md).
+
 ### 1.2 `--help`
 
 ```powershell
@@ -618,6 +620,15 @@ $LASTEXITCODE
 ---
 
 ## 14. Watch Mode
+
+### 14.0 Перевірка dual-binary
+
+| # | Тест | Команда / дія | Очікуваний результат |
+|---|------|---------------|---------------------|
+| 1 | Запуск shot-watch.exe двокліком (з конфігом) | Двічі клацнути `shot-watch.exe` з теки де є `shot.toml` | Tray icon з'являється, консольного вікна немає |
+| 2 | Запуск shot-watch.exe двокліком (без конфігу) | Двічі клацнути `shot-watch.exe` з теки без `shot.toml` і без CLI-аргументів | MessageBox: "Configuration error: No target: provide --process or --title (or set in shot.toml)" |
+| 3 | shot.exe --watch запускає shot-watch.exe | `shot --watch --process=notepad.exe` | `status: ok` + PID, термінал повертає промпт, tray icon |
+| 4 | shot-watch.exe поруч з shot.exe | Перемістити shot-watch.exe в іншу теку, запустити `shot --watch` | Помилка: shot-watch.exe not found |
 
 ### 14.1 Базовий запуск
 

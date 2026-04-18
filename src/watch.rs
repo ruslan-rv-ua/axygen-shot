@@ -10,7 +10,6 @@ use std::os::windows::ffi::OsStrExt;
 use windows::Win32::Foundation::{
     ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS, HANDLE, HWND, LPARAM, LRESULT, POINT, WPARAM,
 };
-use windows::Win32::System::Console::GetConsoleWindow;
 use windows::Win32::System::Threading::{
     CreateEventW, CreateMutexW, CreateProcessW, EVENT_MODIFY_STATE, GetCurrentProcessId,
     OpenEventW, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION, STARTUPINFOW, SetEvent,
@@ -156,61 +155,50 @@ fn parse_vk(key: &str, full_hotkey: &str) -> Result<u32, ShotError> {
     }
 }
 
-pub fn run(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
-    if !is_detached() {
-        let my_pid = unsafe { GetCurrentProcessId() };
+/// Parent-side: called from shot.exe on `--watch`.
+/// Creates IPC events, spawns shot-watch.exe, waits up to 3s for startup signal.
+/// Returns the child PID on success.
+pub fn spawn_daemon(cfg: &CaptureConfig) -> Result<u32, ShotError> {
+    let _ = cfg; // cfg is not used directly — the child re-reads config from CWD/args
+    let my_pid = unsafe { GetCurrentProcessId() };
 
-        let ok_name = wide_string(&format!("Local\\axygen-shot-ok-{}", my_pid));
-        let err_name = wide_string(&format!("Local\\axygen-shot-err-{}", my_pid));
+    let ok_name = wide_string(&format!("Local\\axygen-shot-ok-{}", my_pid));
+    let err_name = wide_string(&format!("Local\\axygen-shot-err-{}", my_pid));
 
-        let ok_event = unsafe {
-            CreateEventW(None, false, false, windows::core::PCWSTR(ok_name.as_ptr()))
-                .map_err(|e| ShotError::HotkeyError(format!("Cannot create ok event: {}", e)))?
-        };
-        let err_event = unsafe {
-            CreateEventW(None, false, false, windows::core::PCWSTR(err_name.as_ptr())).map_err(
-                |e| {
-                    let _ = windows::Win32::Foundation::CloseHandle(ok_event);
-                    ShotError::HotkeyError(format!("Cannot create err event: {}", e))
-                },
-            )?
-        };
-
-        let child_pid = match launch_daemon(my_pid) {
-            Ok(pid) => pid,
-            Err(e) => {
-                unsafe {
-                    let _ = windows::Win32::Foundation::CloseHandle(ok_event);
-                    let _ = windows::Win32::Foundation::CloseHandle(err_event);
-                }
-                return Err(e);
-            }
-        };
-
-        // Block up to 3 s for the daemon to signal ok (index 0) or err (index 1).
-        let wait_result = unsafe { WaitForMultipleObjects(&[ok_event, err_event], false, 3000) };
-
-        unsafe {
+    let ok_event = unsafe {
+        CreateEventW(None, false, false, windows::core::PCWSTR(ok_name.as_ptr()))
+            .map_err(|e| ShotError::HotkeyError(format!("Cannot create ok event: {}", e)))?
+    };
+    let err_event = unsafe {
+        CreateEventW(None, false, false, windows::core::PCWSTR(err_name.as_ptr())).map_err(|e| {
             let _ = windows::Win32::Foundation::CloseHandle(ok_event);
-            let _ = windows::Win32::Foundation::CloseHandle(err_event);
-        }
+            ShotError::HotkeyError(format!("Cannot create err event: {}", e))
+        })?
+    };
 
-        return match wait_result.0 {
-            0 => {
-                if !cfg.quiet || cfg.verbose {
-                    println!("status: ok\nwatch: started (PID {})", child_pid);
-                }
-                Ok(())
+    let child_pid = match launch_daemon(my_pid) {
+        Ok(pid) => pid,
+        Err(e) => {
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(ok_event);
+                let _ = windows::Win32::Foundation::CloseHandle(err_event);
             }
-            1 => Err(read_and_delete_temp_file(my_pid)),
-            _ => Err(ShotError::WatchTimeout),
-        };
-    }
-    run_daemon(cfg, parent_pid)
-}
+            return Err(e);
+        }
+    };
 
-fn is_detached() -> bool {
-    unsafe { GetConsoleWindow().0.is_null() }
+    let wait_result = unsafe { WaitForMultipleObjects(&[ok_event, err_event], false, 3000) };
+
+    unsafe {
+        let _ = windows::Win32::Foundation::CloseHandle(ok_event);
+        let _ = windows::Win32::Foundation::CloseHandle(err_event);
+    }
+
+    match wait_result.0 {
+        0 => Ok(child_pid),
+        1 => Err(read_and_delete_temp_file(my_pid)),
+        _ => Err(ShotError::WatchTimeout),
+    }
 }
 
 // Windows CommandLineToArgvW-compatible quoting: doubles backslashes before quotes/end.
@@ -241,14 +229,24 @@ fn quote_arg(arg: &str) -> String {
 }
 
 fn launch_daemon(parent_pid: u32) -> Result<u32, ShotError> {
-    let exe = std::env::current_exe()
+    let self_exe = std::env::current_exe()
         .map_err(|e| ShotError::HotkeyError(format!("Cannot find own executable: {}", e)))?;
+    let exe = self_exe.with_file_name("shot-watch.exe");
+    if !exe.exists() {
+        return Err(ShotError::HotkeyError(format!(
+            "shot-watch.exe not found next to {} — check installation",
+            self_exe.display()
+        )));
+    }
 
     let mut cmd_line = OsString::new();
     cmd_line.push("\"");
     cmd_line.push(exe.as_os_str());
     cmd_line.push("\"");
     for arg in std::env::args().skip(1) {
+        if arg == "--watch" {
+            continue; // shot-watch.exe always runs the daemon; no --watch flag needed
+        }
         cmd_line.push(" ");
         cmd_line.push(quote_arg(&arg).as_str());
     }
@@ -342,7 +340,7 @@ fn handle_startup_err(err_event: HANDLE, parent_pid: Option<u32>, err: &ShotErro
     }
 }
 
-fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
+pub fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
     let (ok_event, err_event) = open_parent_events(parent_pid);
 
     // Single-instance guard: only one daemon may run system-wide.

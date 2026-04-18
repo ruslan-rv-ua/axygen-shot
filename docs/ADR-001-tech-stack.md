@@ -1,5 +1,9 @@
 # ADR-001: Вибір технологічного стеку для Axygen Shot
 
+> **Status update (2026-04-18):** Superseded partially by ADR-002 — the
+> `SUBSYSTEM:WINDOWS + AttachConsole` pattern described below was replaced with
+> dual binaries. See [ADR-002](ADR-002-dual-binaries.md).
+
 > **Тип задачі:** 📦 Вибір технологічного стеку + 🏗️ Архітектурне рішення
 > **Стек:** Windows desktop, Win32 API, CLI + tray daemon
 > **Статус:** Прийнято

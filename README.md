@@ -20,11 +20,16 @@ to capture, save, and hand off screenshots to AI assistants for visual descripti
 
 ## Installation
 
-Download `shot.exe` from the
+Download `shot.exe` and `shot-watch.exe` from the
 [latest release](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
-and place it anywhere on your `PATH`.
+and place them in the same directory, anywhere on your `PATH`.
 
 Requirements: Windows 10 or later (x86-64).
+
+> **Why two files?** `shot.exe` is a console application so that shells wait for
+> it synchronously (no "press Enter" artifacts). `shot-watch.exe` is a GUI
+> application so the tray daemon runs without a console window flash.
+> See [ADR-002](docs/ADR-002-dual-binaries.md) for details.
 
 ## Quick start
 
@@ -107,7 +112,8 @@ Requires Rust 1.87 or later.
 cargo build --release
 ```
 
-The release binary is at `target\release\shot.exe`.
+The release binary is at `target\release\shot.exe` (and `target\release\shot-watch.exe`
+for the tray daemon).
 
 ## Development
 
@@ -129,7 +135,9 @@ just size            # release build + show binary size
 
 | File | Purpose |
 |------|---------|
-| `src/main.rs` | Entry point, mode dispatch |
+| `src/main.rs` | Entry point for `shot.exe` (CLI), mode dispatch |
+| `src/lib.rs` | Shared library crate (`axygen_shot`) |
+| `src/bin/shot-watch.rs` | Entry point for `shot-watch.exe` (tray daemon) |
 | `src/cli.rs` | CLI argument parsing (clap) |
 | `src/config.rs` | TOML config discovery, validation, init |
 | `src/window_resolver.rs` | Window enumeration and matching |

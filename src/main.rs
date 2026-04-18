@@ -1,27 +1,10 @@
-#![windows_subsystem = "windows"]
-
-mod audio;
-mod capture;
-mod cli;
-mod clipboard;
-mod config;
-mod errors;
-mod storage;
-mod watch;
-mod window_resolver;
-
-use errors::ShotError;
-use window_resolver::Win32Enumerator;
+use axygen_shot::errors::ShotError;
+use axygen_shot::window_resolver::Win32Enumerator;
+use axygen_shot::{
+    audio, capture, cli, clipboard, config, errors, storage, watch, window_resolver,
+};
 
 fn main() {
-    // Attach to parent console for stdout/stderr when launched from terminal.
-    // No-op when launched from GUI (Explorer, Task Scheduler, shortcuts).
-    unsafe {
-        let _ = windows::Win32::System::Console::AttachConsole(
-            windows::Win32::System::Console::ATTACH_PARENT_PROCESS,
-        );
-    }
-
     match run() {
         Ok(()) => {}
         Err(e) => {
@@ -46,7 +29,11 @@ fn run() -> Result<(), ShotError> {
                 .map_err(|e| ShotError::ConfigError(format!("Cannot determine CWD: {}", e)))?;
             let toml = config::find_config(&cwd)?;
             let cfg = config::merge(&args, toml)?;
-            watch::run(&cfg, args.daemon_parent_pid)
+            let child_pid = watch::spawn_daemon(&cfg)?;
+            if !cfg.quiet || cfg.verbose {
+                println!("status: ok\nwatch: started (PID {})", child_pid);
+            }
+            Ok(())
         }
     }
 }

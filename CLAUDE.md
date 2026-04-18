@@ -82,7 +82,9 @@ just run -- --list-windows           # run with args
 
 ## Project structure
 
-- `src/main.rs` — entry point, mode dispatch
+- `src/main.rs` — entry point for `shot.exe` (CLI), mode dispatch
+- `src/lib.rs` — shared library crate (`axygen_shot`)
+- `src/bin/shot-watch.rs` — entry point for `shot-watch.exe` (tray daemon)
 - `src/cli.rs` — clap derive struct, Mode enum
 - `src/config.rs` — TOML parsing, walk-up discovery, merge, init
 - `src/window_resolver.rs` — WindowEnumerator trait, Win32 impl, resolve/list
@@ -120,7 +122,7 @@ message: <human-readable>
 - GlobalFree and MessageBeep use raw FFI — not exposed in windows crate v0.62
 - windows crate v0.62: some APIs moved (PrintWindow → Xps, CF_DIB → Ole)
 - All modules are stateless — no global mutable state
-- Watch mode daemon detected via GetConsoleWindow() — no console = daemon mode
+- `shot.exe` is CUI; `shot-watch.exe` is GUI. Do not call AttachConsole.
 - RegisterHotKey requires at least one modifier (Win, Ctrl, Shift, Alt)
 - Tray tooltip max 128 UTF-16 chars (szTip field limit)
 - `[profile.dev]` has `panic = "abort"` to prevent panic UB through extern "system" wndproc
