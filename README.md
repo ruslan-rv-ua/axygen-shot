@@ -1,8 +1,8 @@
 # Axygen Shot
 
-[![CI](https://github.com/nickolay-kondratyev/axygen-shot/actions/workflows/ci.yml/badge.svg)](https://github.com/nickolay-kondratyev/axygen-shot/actions/workflows/ci.yml)
+[![CI](https://github.com/ruslan-rv-ua/axygen-shot/actions/workflows/ci.yml/badge.svg)](https://github.com/ruslan-rv-ua/axygen-shot/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/nickolay-kondratyev/axygen-shot)](https://github.com/nickolay-kondratyev/axygen-shot/releases/latest)
+[![Release](https://img.shields.io/github/v/release/ruslan-rv-ua/axygen-shot)](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
 
 A portable Windows CLI tool for capturing application windows as screenshots.
 Designed primarily for blind developers who need a fast, keyboard-driven workflow
@@ -21,7 +21,7 @@ to capture, save, and hand off screenshots to AI assistants for visual descripti
 ## Installation
 
 Download `shot.exe` from the
-[latest release](https://github.com/nickolay-kondratyev/axygen-shot/releases/latest)
+[latest release](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
 and place it anywhere on your `PATH`.
 
 Requirements: Windows 10 or later (x86-64).
