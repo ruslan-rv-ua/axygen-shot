@@ -1,0 +1,46 @@
+name: Update Scoop
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (without v prefix, e.g. 0.2.0)'
+        required: true
+        type: string
+
+jobs:
+  update:
+    name: Update Scoop manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release ZIP and compute hash
+        id: release
+        run: |
+          URL="https://github.com/ruslan-rv-ua/axygen-shot/releases/download/v${{ inputs.version }}/axygen-shot-${{ inputs.version }}-windows-x86_64.zip"
+          TEMP=$(mktemp)
+
+          HTTP_CODE=$(curl -fsSL --write-out "%{http_code}" -o "$TEMP" "$URL")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Download failed (HTTP $HTTP_CODE). Is release v${{ inputs.version }} published?"
+            exit 1
+          fi
+
+          HASH=$(sha256sum "$TEMP" | awk '{print $1}')
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Downloaded: $URL"
+          echo "SHA256: $HASH"
+
+      - name: Dispatch to scoop-bucket
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          repository: ruslan-rv-ua/scoop-bucket
+          event-type: update-axygen-shot
+          client-payload: |
+            {
+              "app": "axygen-shot",
+              "version": "${{ inputs.version }}",
+              "hash": "${{ steps.release.outputs.hash }}",
+              "url": "${{ steps.release.outputs.url }}"
+            }
