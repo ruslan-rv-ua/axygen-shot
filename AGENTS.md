@@ -21,6 +21,10 @@ cli → config → window_resolver → capture → storage → clipboard → aud
 watch (daemon: hotkey + tray + message loop) ───────────────────────┘
 ```
 
+Two binaries share the `axygen_shot` library crate (src/lib.rs):
+- `shot.exe` (CUI) — src/main.rs — CLI commands + spawns daemon
+- `shot-watch.exe` (GUI) — src/bin/shot-watch.rs — tray daemon only
+
 All modules in `src/`. Each file = one module.
 WindowResolver uses trait-based DI (WindowEnumerator trait).
 

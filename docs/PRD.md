@@ -11,7 +11,7 @@ As a totally blind Windows developer, I cannot visually inspect the appearance o
 
 ## Solution
 
-**Axygen Shot** (`shot.exe`) — a single portable Windows executable. Per-project configuration lives in `shot.toml` at the project root and specifies which window to capture. On invocation, the tool finds the target window, captures it, saves it to a local `screenshots/` folder with a timestamped name, plays a confirmation beep, and copies the result to the clipboard.
+**Axygen Shot** (`shot.exe` + `shot-watch.exe`) — two portable Windows executables (`shot.exe` for CLI, `shot-watch.exe` for the tray daemon). This dual-binary split fixes a shell prompt race condition inherent to GUI-subsystem executables with `AttachConsole` (see [ADR-002](ADR-002-dual-binaries.md)). Per-project configuration lives in `shot.toml` at the project root and specifies which window to capture. On invocation, the tool finds the target window, captures it, saves it to a local `screenshots/` folder with a timestamped name, plays a confirmation beep, and copies the result to the clipboard.
 
 Two invocation modes:
 - **CLI mode** (`shot.exe [label]`): captures once and exits — called from a terminal or shortcut
@@ -260,7 +260,8 @@ Once the stack is decided, create two files in the repo root:
 | Context | Name |
 |---|---|
 | Product name | **Axygen Shot** |
-| Binary (executable) | `shot.exe` |
+| Binary (CLI) | `shot.exe` |
+| Binary (tray daemon) | `shot-watch.exe` |
 | Scoop manifest | `axygen-shot.json` |
 | Scoop install command | `scoop install axygen-shot` |
 | GitHub repository | `axygen-shot` |
