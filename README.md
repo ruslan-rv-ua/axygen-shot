@@ -20,6 +20,15 @@ to capture, save, and hand off screenshots to AI assistants for visual descripti
 
 ## Installation
 
+### Via Scoop (recommended)
+
+```powershell
+scoop bucket add ruslan-rv-ua https://github.com/ruslan-rv-ua/scoop-bucket
+scoop install axygen-shot
+```
+
+### Manual
+
 Download `shot.exe` and `shot-watch.exe` from the
 [latest release](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
 and place them in the same directory, anywhere on your `PATH`.

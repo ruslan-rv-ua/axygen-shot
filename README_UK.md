@@ -21,6 +21,15 @@
 
 ## Встановлення
 
+### Через Scoop (рекомендовано)
+
+```powershell
+scoop bucket add ruslan-rv-ua https://github.com/ruslan-rv-ua/scoop-bucket
+scoop install axygen-shot
+```
+
+### Вручну
+
 Завантажте `shot.exe` та `shot-watch.exe` з
 [останнього релізу](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
 і помістіть обидва файли в одну теку, що є у вашому `PATH`.

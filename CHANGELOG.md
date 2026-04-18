@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of re-launching itself.
 - Extracted shared code into `axygen_shot` library crate (`src/lib.rs`).
 
+### Added
+
+- Scoop package manager support: `scoop install axygen-shot` via
+  [ruslan-rv-ua bucket](https://github.com/ruslan-rv-ua/scoop-bucket).
+- GitHub Actions workflow (`update-scoop.yml`) to update Scoop manifest on new
+  releases.
+
 ### Fixed
 
 - Shell prompt-before-output race condition in cmd.exe and PowerShell caused by
