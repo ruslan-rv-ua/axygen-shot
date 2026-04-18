@@ -1,5 +1,9 @@
 # Axygen Shot
 
+[![CI](https://github.com/nickolay-kondratyev/axygen-shot/actions/workflows/ci.yml/badge.svg)](https://github.com/nickolay-kondratyev/axygen-shot/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/nickolay-kondratyev/axygen-shot)](https://github.com/nickolay-kondratyev/axygen-shot/releases/latest)
+
 A portable Windows CLI tool for capturing application windows as screenshots.
 Designed primarily for blind developers who need a fast, keyboard-driven workflow
 to capture, save, and hand off screenshots to AI assistants for visual description.

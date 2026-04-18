@@ -1,5 +1,9 @@
 # Axygen Shot
 
+[![CI](https://github.com/nickolay-kondratyev/axygen-shot/actions/workflows/ci.yml/badge.svg)](https://github.com/nickolay-kondratyev/axygen-shot/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/nickolay-kondratyev/axygen-shot)](https://github.com/nickolay-kondratyev/axygen-shot/releases/latest)
+
 Портативний CLI-інструмент для Windows, який захоплює вікна застосунків як скріншоти.
 Розроблений насамперед для незрячих розробників, яким потрібен швидкий, клавіатурний
 робочий процес для захоплення, збереження та передачі скріншотів ШІ-асистентам
