@@ -170,12 +170,10 @@ pub fn spawn_daemon(cfg: &CaptureConfig) -> Result<u32, ShotError> {
             .map_err(|e| ShotError::HotkeyError(format!("Cannot create ok event: {}", e)))?
     };
     let err_event = unsafe {
-        CreateEventW(None, false, false, windows::core::PCWSTR(err_name.as_ptr())).map_err(
-            |e| {
-                let _ = windows::Win32::Foundation::CloseHandle(ok_event);
-                ShotError::HotkeyError(format!("Cannot create err event: {}", e))
-            },
-        )?
+        CreateEventW(None, false, false, windows::core::PCWSTR(err_name.as_ptr())).map_err(|e| {
+            let _ = windows::Win32::Foundation::CloseHandle(ok_event);
+            ShotError::HotkeyError(format!("Cannot create err event: {}", e))
+        })?
     };
 
     let child_pid = match launch_daemon(my_pid) {

@@ -40,8 +40,12 @@ clean:
 
 # Build release and show binary size
 size: build
-    Get-Item target\release\shot.exe | Format-Table Name, @{N='Size'; E={"$([math]::Round($_.Length / 1KB)) KB"}} -AutoSize
+    Get-ChildItem target\release\shot.exe, target\release\shot-watch.exe | Format-Table Name, @{N='Size'; E={"$([math]::Round($_.Length / 1KB)) KB"}} -AutoSize
 
-# Run shot.exe with arguments (e.g., just run -- --list-windows)
+# Run shot.exe (CLI) with arguments (e.g., just run -- --list-windows)
 run *ARGS:
-    cargo run --release -- {{ARGS}}
+    cargo run --release --bin shot -- {{ARGS}}
+
+# Run shot-watch.exe (tray daemon) directly — for debugging, prefer `just run -- --watch`
+run-watch *ARGS:
+    cargo run --release --bin shot-watch -- {{ARGS}}
