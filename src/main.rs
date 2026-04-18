@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod audio;
 mod capture;
 mod cli;
@@ -12,6 +14,14 @@ use errors::ShotError;
 use window_resolver::Win32Enumerator;
 
 fn main() {
+    // Attach to parent console for stdout/stderr when launched from terminal.
+    // No-op when launched from GUI (Explorer, Task Scheduler, shortcuts).
+    unsafe {
+        let _ = windows::Win32::System::Console::AttachConsole(
+            windows::Win32::System::Console::ATTACH_PARENT_PROCESS,
+        );
+    }
+
     match run() {
         Ok(()) => {}
         Err(e) => {

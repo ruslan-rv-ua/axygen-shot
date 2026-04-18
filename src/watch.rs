@@ -96,7 +96,7 @@ pub fn parse_hotkey(s: &str) -> Result<(u32, u32), ShotError> {
             "alt" => modifiers |= MOD_ALT,
             key => {
                 if vk.is_some() {
-                    return Err(ShotError::ArgError(format!(
+                    return Err(ShotError::HotkeyError(format!(
                         "Invalid hotkey '{}': multiple keys specified",
                         s
                     )));
@@ -107,10 +107,10 @@ pub fn parse_hotkey(s: &str) -> Result<(u32, u32), ShotError> {
     }
 
     let vk =
-        vk.ok_or_else(|| ShotError::ArgError(format!("Invalid hotkey '{}': no key specified", s)))?;
+        vk.ok_or_else(|| ShotError::HotkeyError(format!("Invalid hotkey '{}': no key specified", s)))?;
 
     if modifiers == 0 {
-        return Err(ShotError::ArgError(format!(
+        return Err(ShotError::HotkeyError(format!(
             "Invalid hotkey '{}': at least one modifier required (Win, Ctrl, Shift, Alt)",
             s,
         )));
@@ -144,7 +144,7 @@ fn parse_vk(key: &str, full_hotkey: &str) -> Result<u32, ShotError> {
     // Named keys
     match lower.as_str() {
         "printscreen" | "prtsc" => Ok(0x2C), // VK_SNAPSHOT
-        _ => Err(ShotError::ArgError(format!(
+        _ => Err(ShotError::HotkeyError(format!(
             "Invalid hotkey key '{}' in '{}' — valid keys: F1-F24, A-Z, 0-9, PrintScreen",
             key, full_hotkey,
         ))),

@@ -89,8 +89,12 @@ unsafe fn set_image(png_bytes: &[u8], width: u32, height: u32) -> Result<(), Sho
     debug_assert_eq!(info.height, height, "PNG height mismatch");
 
     // Convert RGBA → BGRA and flip vertically (DIB is bottom-up)
-    let stride = (width * 4) as usize;
-    let mut bgra_bottomup = vec![0u8; (width * height * 4) as usize];
+    let pixel_count = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|n| n.checked_mul(4))
+        .ok_or_else(|| ShotError::ClipboardError("Image too large for clipboard".into()))?;
+    let stride = width as usize * 4;
+    let mut bgra_bottomup = vec![0u8; pixel_count];
     for y in 0..height as usize {
         let src_row = &rgba_pixels[y * stride..(y + 1) * stride];
         let dst_row_start = (height as usize - 1 - y) * stride;

@@ -19,9 +19,9 @@ pub fn sanitize_filename(s: &str) -> String {
         .collect()
 }
 
-/// Build filename: YYYY-MM-DD_HHMMSS_<sanitized>.png
+/// Build filename: YYYY-MM-DD_HHMMSS-mmm_<sanitized>.png
 pub fn build_filename(label: Option<&str>, window_title: &str) -> String {
-    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H%M%S");
+    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H%M%S%3f");
     let name_part = match label {
         Some(l) => sanitize_filename(l),
         None => sanitize_filename(window_title),
@@ -98,10 +98,13 @@ mod tests {
     #[test]
     fn build_filename_has_timestamp_prefix() {
         let name = build_filename(Some("test"), "title");
-        // Format: YYYY-MM-DD_HHMMSS_test.png
+        // Format: YYYY-MM-DD_HHMMSSmmm_test.png
         assert!(name.chars().nth(4) == Some('-')); // YYYY-
         assert!(name.chars().nth(7) == Some('-')); // MM-
         assert!(name.chars().nth(10) == Some('_')); // DD_
+        // Milliseconds: 3 extra digits after SS
+        let underscore_pos = name.find("_test.png").unwrap();
+        assert_eq!(underscore_pos, 20); // YYYY-MM-DD_HHMMSSmmm = 20 chars
     }
 
     // --- save ---

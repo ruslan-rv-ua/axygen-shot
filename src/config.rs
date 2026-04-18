@@ -34,7 +34,11 @@ fn default_folder() -> String {
 
 /// Validate folder: must be relative, no "..", no UNC, no device paths.
 pub fn validate_folder(folder: &str) -> Result<(), ShotError> {
-    if folder.contains("..") {
+    use std::path::Component;
+    if Path::new(folder)
+        .components()
+        .any(|c| matches!(c, Component::ParentDir))
+    {
         return Err(ShotError::ConfigError(format!(
             "Folder must not contain '..': \"{}\"",
             folder
@@ -138,7 +142,22 @@ pub fn merge(
 
 /// Escape special characters for TOML basic string values.
 fn escape_toml_string(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => {
+                use std::fmt::Write;
+                let _ = write!(out, "\\u{:04X}", c as u32);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// Create shot.toml template. Takes dir param for testability (spec uses CWD).
@@ -246,6 +265,11 @@ mod tests {
     #[test]
     fn valid_nested_folder() {
         assert!(validate_folder("sub/folder").is_ok());
+    }
+
+    #[test]
+    fn valid_double_dot_in_name() {
+        assert!(validate_folder("foo..bar").is_ok());
     }
 
     #[test]
@@ -544,5 +568,31 @@ mod tests {
         let cli = CliArgs::parse_from(["shot", "--hotkey=Win+F11"]);
         let cfg = merge(&cli, Some((toml_config, PathBuf::from(".")))).unwrap();
         assert_eq!(cfg.hotkey, "Win+F11");
+    }
+
+    // --- escape_toml_string ---
+
+    #[test]
+    fn escape_toml_backslash_and_quote() {
+        assert_eq!(escape_toml_string(r#"a\"b"#), r#"a\\\"b"#);
+    }
+
+    #[test]
+    fn escape_toml_control_chars() {
+        assert_eq!(escape_toml_string("a\nb\rc\td"), "a\\nb\\rc\\td");
+    }
+
+    #[test]
+    fn escape_toml_null_byte() {
+        assert_eq!(escape_toml_string("a\0b"), "a\\u0000b");
+    }
+
+    #[test]
+    fn escape_toml_newline_injection_produces_valid_toml() {
+        let malicious = "evil\n[malicious]\nprocess = \"other.exe\"";
+        let escaped = escape_toml_string(malicious);
+        let toml_str = format!("process = \"{}\"", escaped);
+        let parsed: TomlConfig = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.process.as_deref(), Some(malicious));
     }
 }
