@@ -133,7 +133,7 @@ unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> windows::
         let class_name = OsString::from_wide(&class_buf[..class_len as usize])
             .to_string_lossy()
             .to_string();
-        if class_name == "Shell_TrayWnd" || class_name == "Progman" {
+        if class_name == "Shell_TrayWnd" || class_name == "Progman" || class_name == "WorkerW" {
             return TRUE;
         }
     }

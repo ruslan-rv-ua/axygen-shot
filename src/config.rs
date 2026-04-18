@@ -206,13 +206,14 @@ clipboard = \"path\"          # \"path\" | \"image\" | \"both\" (default: \"path
     // Append "screenshots/" to .gitignore
     let gitignore_path = dir.join(".gitignore");
     let entry = "screenshots/";
-    let already_present = gitignore_path.exists() && {
-        let content = std::fs::read_to_string(&gitignore_path)
-            .map_err(|e| ShotError::InitError(format!("Cannot read .gitignore: {}", e)))?;
-        content.lines().any(|line| line.trim() == entry)
+    let existing_content = if gitignore_path.exists() {
+        std::fs::read_to_string(&gitignore_path)
+            .map_err(|e| ShotError::InitError(format!("Cannot read .gitignore: {}", e)))?
+    } else {
+        String::new()
     };
 
-    if !already_present {
+    if !existing_content.lines().any(|line| line.trim() == entry) {
         use std::io::Write;
         let mut file = std::fs::OpenOptions::new()
             .create(true)
@@ -220,13 +221,9 @@ clipboard = \"path\"          # \"path\" | \"image\" | \"both\" (default: \"path
             .open(&gitignore_path)
             .map_err(|e| ShotError::InitError(format!("Cannot write .gitignore: {}", e)))?;
 
-        // Ensure we start on a new line if file doesn't end with newline
-        if gitignore_path.exists() {
-            let content = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
-            if !content.is_empty() && !content.ends_with('\n') {
-                writeln!(file)
-                    .map_err(|e| ShotError::InitError(format!("Cannot write .gitignore: {}", e)))?;
-            }
+        if !existing_content.is_empty() && !existing_content.ends_with('\n') {
+            writeln!(file)
+                .map_err(|e| ShotError::InitError(format!("Cannot write .gitignore: {}", e)))?;
         }
 
         writeln!(file, "{}", entry)
