@@ -241,14 +241,24 @@ fn quote_arg(arg: &str) -> String {
 }
 
 fn launch_daemon(parent_pid: u32) -> Result<u32, ShotError> {
-    let exe = std::env::current_exe()
+    let self_exe = std::env::current_exe()
         .map_err(|e| ShotError::HotkeyError(format!("Cannot find own executable: {}", e)))?;
+    let exe = self_exe.with_file_name("shot-watch.exe");
+    if !exe.exists() {
+        return Err(ShotError::HotkeyError(format!(
+            "shot-watch.exe not found next to {} — check installation",
+            self_exe.display()
+        )));
+    }
 
     let mut cmd_line = OsString::new();
     cmd_line.push("\"");
     cmd_line.push(exe.as_os_str());
     cmd_line.push("\"");
     for arg in std::env::args().skip(1) {
+        if arg == "--watch" {
+            continue; // shot-watch.exe always runs the daemon; no --watch flag needed
+        }
         cmd_line.push(" ");
         cmd_line.push(quote_arg(&arg).as_str());
     }
