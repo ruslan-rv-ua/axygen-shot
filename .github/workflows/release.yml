@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.0)"
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Verify version matches Cargo.toml
+        shell: pwsh
+        run: |
+          $cargoVersion = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"(.+)"').Matches.Groups[1].Value
+          if ($cargoVersion -ne "${{ inputs.version }}") {
+            Write-Error "Input version '${{ inputs.version }}' does not match Cargo.toml version '$cargoVersion'"
+            exit 1
+          }
+
+      - name: Run CI checks
+        run: |
+          cargo fmt -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Create distribution zip
+        shell: pwsh
+        run: |
+          $distDir = "dist"
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+          Copy-Item target\release\shot.exe $distDir\
+          Copy-Item CHANGELOG.md $distDir\ -ErrorAction SilentlyContinue
+          Copy-Item LICENSE* $distDir\ -ErrorAction SilentlyContinue
+          Copy-Item README* $distDir\ -ErrorAction SilentlyContinue
+          $zipName = "axygen-shot-${{ inputs.version }}-windows-x86_64.zip"
+          Compress-Archive -Path $distDir\* -DestinationPath $zipName
+          # Generate SHA-256 checksum
+          $hash = (Get-FileHash $zipName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zipName" | Out-File -Encoding ascii "$zipName.sha256"
+          Write-Output "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body_path: ""
+          generate_release_notes: true
+          files: |
+            axygen-shot-${{ inputs.version }}-windows-x86_64.zip
+            axygen-shot-${{ inputs.version }}-windows-x86_64.zip.sha256
