@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Split into two binaries: `shot.exe` (console subsystem, CLI) and
+  `shot-watch.exe` (windows subsystem, tray daemon). Both must reside in the
+  same directory. See [ADR-002](docs/ADR-002-dual-binaries.md).
+- `shot.exe --watch` now spawns `shot-watch.exe` as a detached daemon process
+  instead of re-launching itself.
+- Extracted shared code into `axygen_shot` library crate (`src/lib.rs`).
+
+### Fixed
+
+- Shell prompt-before-output race condition in cmd.exe and PowerShell caused by
+  GUI-subsystem executable with `AttachConsole`. The console subsystem `shot.exe`
+  is now waited on synchronously by the shell.
+
 ## [0.1.0] - 2025-07-17
 
 First public release of Axygen Shot — a portable Windows CLI screenshot tool
