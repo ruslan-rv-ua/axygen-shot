@@ -16,6 +16,8 @@ pub struct CaptureResult {
     pub png_bytes: Vec<u8>,
     pub width: u32,
     pub height: u32,
+    /// Raw BGRA pixels, top-down row order (same as GetDIBits with negative height).
+    pub bgra_pixels: Vec<u8>,
 }
 
 /// Capture a window as PNG bytes.
@@ -133,6 +135,9 @@ pub fn capture_window(hwnd: isize) -> Result<CaptureResult, ShotError> {
             ));
         }
 
+        // Save raw BGRA pixels before conversion
+        let bgra_pixels = pixels.clone();
+
         // Convert BGRA → RGBA
         for chunk in pixels.chunks_exact_mut(4) {
             chunk.swap(0, 2);
@@ -155,6 +160,7 @@ pub fn capture_window(hwnd: isize) -> Result<CaptureResult, ShotError> {
             png_bytes: png_buf,
             width,
             height,
+            bgra_pixels,
         })
     }
 }

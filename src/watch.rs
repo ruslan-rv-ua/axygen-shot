@@ -564,7 +564,7 @@ fn do_capture(cfg: &CaptureConfig) {
         clipboard::write_clipboard(
             cfg.clipboard,
             &saved.path,
-            &capture_result.png_bytes,
+            &capture_result.bgra_pixels,
             capture_result.width,
             capture_result.height,
         )?;

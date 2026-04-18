@@ -116,7 +116,7 @@ fn run_capture(args: &cli::CliArgs) -> Result<(), ShotError> {
     clipboard::write_clipboard(
         cfg.clipboard,
         &saved.path,
-        &result.png_bytes,
+        &result.bgra_pixels,
         result.width,
         result.height,
     )?;

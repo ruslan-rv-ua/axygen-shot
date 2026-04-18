@@ -19,7 +19,7 @@ use windows::Win32::System::Ole::{CF_DIB, CF_UNICODETEXT};
 pub fn write_clipboard(
     mode: ClipboardMode,
     file_path: &Path,
-    png_bytes: &[u8],
+    bgra_pixels: &[u8],
     width: u32,
     height: u32,
 ) -> Result<(), ShotError> {
@@ -30,9 +30,9 @@ pub fn write_clipboard(
 
         let result = match mode {
             ClipboardMode::Path => set_path(file_path),
-            ClipboardMode::Image => set_image(png_bytes, width, height),
+            ClipboardMode::Image => set_image(bgra_pixels, width, height),
             ClipboardMode::Both => {
-                set_path(file_path).and_then(|()| set_image(png_bytes, width, height))
+                set_path(file_path).and_then(|()| set_image(bgra_pixels, width, height))
             }
         };
 
@@ -72,39 +72,24 @@ unsafe fn set_path(file_path: &Path) -> Result<(), ShotError> {
 }
 
 /// Set CF_DIB with device-independent bitmap.
-/// Builds BITMAPINFOHEADER + raw BGRA pixel data.
-unsafe fn set_image(png_bytes: &[u8], width: u32, height: u32) -> Result<(), ShotError> {
-    // Decode PNG to get raw RGBA pixels
-    let decoder = png::Decoder::new(std::io::Cursor::new(png_bytes));
-    let mut reader = decoder
-        .read_info()
-        .map_err(|e| ShotError::ClipboardError(format!("PNG decode error: {}", e)))?;
-    let mut rgba_pixels = vec![0u8; reader.output_buffer_size()];
-    reader
-        .next_frame(&mut rgba_pixels)
-        .map_err(|e| ShotError::ClipboardError(format!("PNG frame error: {}", e)))?;
-
-    let info = reader.info();
-    debug_assert_eq!(info.width, width, "PNG width mismatch");
-    debug_assert_eq!(info.height, height, "PNG height mismatch");
-
-    // Convert RGBA → BGRA and flip vertically (DIB is bottom-up)
+/// Accepts raw BGRA pixels in top-down order and flips to bottom-up for DIB.
+unsafe fn set_image(bgra_topdown: &[u8], width: u32, height: u32) -> Result<(), ShotError> {
     let pixel_count = (width as usize)
         .checked_mul(height as usize)
         .and_then(|n| n.checked_mul(4))
         .ok_or_else(|| ShotError::ClipboardError("Image too large for clipboard".into()))?;
     let stride = width as usize * 4;
+
+    if bgra_topdown.len() < pixel_count {
+        return Err(ShotError::ClipboardError("BGRA buffer too small".into()));
+    }
+
+    // Flip vertically: top-down → bottom-up for DIB
     let mut bgra_bottomup = vec![0u8; pixel_count];
     for y in 0..height as usize {
-        let src_row = &rgba_pixels[y * stride..(y + 1) * stride];
+        let src_row = &bgra_topdown[y * stride..(y + 1) * stride];
         let dst_row_start = (height as usize - 1 - y) * stride;
-        let dst_row = &mut bgra_bottomup[dst_row_start..dst_row_start + stride];
-        for (src, dst) in src_row.chunks_exact(4).zip(dst_row.chunks_exact_mut(4)) {
-            dst[0] = src[2]; // B
-            dst[1] = src[1]; // G
-            dst[2] = src[0]; // R
-            dst[3] = src[3]; // A
-        }
+        bgra_bottomup[dst_row_start..dst_row_start + stride].copy_from_slice(src_row);
     }
 
     // Build DIB: header + pixels
