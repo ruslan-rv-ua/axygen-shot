@@ -4,163 +4,151 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/ruslan-rv-ua/axygen-shot)](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
 
-A portable Windows CLI tool for capturing application windows as screenshots.
-Designed primarily for blind developers who need a fast, keyboard-driven workflow
-to capture, save, and hand off screenshots to AI assistants for visual description.
+A portable Windows command-line utility for capturing specific application windows as screenshots. Designed primarily to assist blind developers, it provides a fast, keyboard-driven workflow to capture, save, and pass screenshots to AI coding assistants for visual description.
 
 **[Українська версія](README_UK.md)**
 
-## What it does
+## Features
 
-- Captures a specific application window by process name or title substring
-- Saves PNG screenshots with timestamped filenames to a project subfolder
-- Copies the result to the clipboard (file path, image, or both)
-- Plays audio confirmation so you know it worked without looking at the screen
-- Runs as a background daemon with a global hotkey for repeated captures
+- Captures a specific window matched by its process name or title substring.
+- Automatically saves PNG screenshots with timestamped filenames to a project subfolder.
+- Copies the result directly to your clipboard (image itself, file path, or both).
+- Plays distinctive audio confirmation tones upon success or failure.
+- Can run continuously as a background daemon with a global hotkey for repeated captures.
 
 ## Installation
 
-### Via Scoop (recommended)
+### Via Scoop (Recommended)
 
 ```powershell
 scoop bucket add ruslan-rv-ua https://github.com/ruslan-rv-ua/scoop-bucket
 scoop install axygen-shot
 ```
 
-### Manual
+### Manual Installation
 
-Download `shot.exe` and `shot-watch.exe` from the
-[latest release](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest)
-and place them in the same directory, anywhere on your `PATH`.
+1. Download the latest release from the [Releases page](https://github.com/ruslan-rv-ua/axygen-shot/releases/latest).
+2. Extract the archive. 
+3. Move both `shot.exe` and `shot-watch.exe` into the same directory.
+4. Ensure that directory is added to your system's `PATH` environment variable.
 
 Requirements: Windows 10 or later (x86-64).
 
-> **Why two files?** `shot.exe` is a console application so that shells wait for
-> it synchronously (no "press Enter" artifacts). `shot-watch.exe` is a GUI
-> application so the tray daemon runs without a console window flash.
-> See [ADR-002](docs/ADR-002-dual-binaries.md) for details.
+## Quick Start
 
-## Quick start
+Navigate to your project directory and initialize the configuration for the application you want to capture (e.g., your web browser or emulator):
 
-```
+```powershell
 cd my-project
 shot --init --process=myapp.exe
+```
+
+This command creates a `shot.toml` file in the current directory. To capture the window, simply run:
+
+```powershell
 shot
 ```
 
-This creates `shot.toml` in the current directory, captures the window of
-`myapp.exe`, saves the screenshot to `screenshots/`, copies the file path to
-the clipboard, and plays a confirmation sound.
+The app will silently capture the window of `myapp.exe`, save the PNG file to the `screenshots/` directory, copy the file path to your clipboard, and play a confirmation sound.
 
 ## Configuration
 
-`shot.toml` lives at the project root (next to `.git`). The tool searches upward
-from the current directory to find it.
+Axygen Shot uses a `shot.toml` configuration file. The tool searches upwards from your current directory to find this file, meaning you should generally place it at the root of your project (e.g., next to `.git`).
+
+### Configuration Options
 
 ```toml
 # shot.toml
-process   = "myapp.exe"          # match by process name
-# title   = "MyApp"              # or match by title substring (OR logic)
-folder    = "screenshots"        # output subfolder (default: "screenshots")
-clipboard = "path"               # "path" | "image" | "both" (default: "path")
-# hotkey  = "Win+F12"            # watch mode hotkey (default: "Win+F12")
+process   = "myapp.exe"          # Match the window by its process name
+# title   = "MyApp"              # Alternatively, match by title substring (OR logic)
+folder    = "screenshots"        # Directory to save the screenshots (default: "screenshots")
+clipboard = "path"               # What to copy to the clipboard: "path", "image", or "both" (default: "path")
+# hotkey  = "Win+F12"            # The hotkey used in watch mode (default: "Win+F12")
 ```
 
-All fields except `process` or `title` are optional with sensible defaults.
+At minimum, you must specify either `process` or `title`. Other fields are strictly optional and use sensible defaults.
 
-## Usage
+## Usage Guide
 
-```
-shot                        Capture once and exit
-shot my-label               Capture with a custom filename label
-shot --watch                Run as background daemon with global hotkey
-shot --list-windows         List all capturable windows
-shot --check                Validate configuration without capturing
-shot --init                 Create shot.toml template in current directory
-shot --init --process=app   Create pre-filled shot.toml
-shot --version              Print version
-shot --help                 Print help
-```
+Axygen Shot can be executed as a one-off command or run continuously in the background.
 
-### CLI overrides
-
-Any config value can be overridden on the command line:
-
-```
-shot --process=other.exe --clipboard=both --folder=snaps "my label"
+```text
+shot                        Capture the defined window once and exit
+shot my-custom-label        Capture and append "my-custom-label" to the filename
+shot --watch                Start the background daemon responding to the global hotkey
+shot --list-windows         Display a list of all currently capturable windows
+shot --check                Validate the configuration without taking a screenshot
+shot --init                 Generate an empty shot.toml template in the current directory
+shot --init --process=app   Generate a pre-filled shot.toml
+shot --version              Print tool version
+shot --help                 Print help information
 ```
 
-### Watch mode
+### Overriding Settings temporarily
 
+You can override any setting from `shot.toml` directly using command-line arguments:
+
+```powershell
+shot --process=other.exe --clipboard=both --folder=snaps "alternative-label"
 ```
+
+### Watch Mode (Background Daemon)
+
+If you need to make repeated captures without switching your focus away from the target window, use Watch Mode:
+
+```powershell
 shot --watch
 ```
 
-Starts a background daemon that listens for a global hotkey (default `Win+F12`).
-A system tray icon appears with a right-click menu offering Restart and Exit.
-Only one daemon runs at a time per system (enforced by a named mutex).
+This starts a background daemon waiting for the global hotkey (`Win+F12` by default). The tool will appear as an icon in your system tray, where you can right-click to restart or exit. Only one daemon will run per system to avoid conflicts.
 
-## Output
+### Output and Feedback
 
-On success, the tool prints to stdout:
+Every operation provides text and audio feedback.
 
-```
+**Success:** Plays a short confirmation tone, exits with code 0, and prints:
+```text
 status: ok
 file: C:\projects\myapp\screenshots\2025-01-15_143022345_myapp-main-window.png
 clipboard: path
 ```
 
-On failure, it prints to stderr and exits with a non-zero code.
-Audio feedback accompanies both outcomes.
-
-## Building from source
-
-Requires Rust 1.87 or later.
-
-```
-cargo build --release
-```
-
-The release binary is at `target\release\shot.exe` (and `target\release\shot-watch.exe`
-for the tray daemon).
+**Failure:** Plays a multi-tone error sound, exits with a non-zero code, and prints human-readable error details to standard error (stderr).
 
 ## Development
 
-```
-cargo test           # run all tests
-cargo clippy -- -D warnings   # lint
-cargo fmt -- --check          # format check
-```
+This section is intended for developers modifying or building the tool from source. 
 
-Or use the justfile:
+> **Why two executable files?** `shot.exe` is a standard console application, ensuring shell environments wait for the command synchronously. `shot-watch.exe` is specifically compiled as a Windows GUI application, allowing the background tray daemon to run silently without flashing a black console window. See [ADR-002](docs/ADR-002-dual-binaries.md) for deeper technical context.
 
+### Building from Source
+
+Requires Rust 1.87 or newer.
+
+```cmd
+cargo build --release
 ```
-just ci              # lint + format check + test
-just build           # release build
-just size            # release build + show binary size
+Compiled binaries are output to `target\release\shot.exe` and `target\release\shot-watch.exe`.
+
+### Common Tasks
+
+A `justfile` is provided for convenience:
+
+```cmd
+just ci              # Linter, format check, and all unit tests
+just build           # Release build
+just size            # Release build + show final binary sizes
 ```
-
-## Project structure
-
-| File | Purpose |
-|------|---------|
-| `src/main.rs` | Entry point for `shot.exe` (CLI), mode dispatch |
-| `src/lib.rs` | Shared library crate (`axygen_shot`) |
-| `src/bin/shot-watch.rs` | Entry point for `shot-watch.exe` (tray daemon) |
-| `src/cli.rs` | CLI argument parsing (clap) |
-| `src/config.rs` | TOML config discovery, validation, init |
-| `src/window_resolver.rs` | Window enumeration and matching |
-| `src/capture.rs` | Window capture via PrintWindow/BitBlt |
-| `src/storage.rs` | Filename generation and PNG file saving |
-| `src/clipboard.rs` | Clipboard operations (path and image) |
-| `src/audio.rs` | Audio feedback via MessageBeep |
-| `src/watch.rs` | Watch mode daemon, hotkey, tray icon |
-| `src/errors.rs` | Error types and formatting |
+Alternatively, using Cargo directly:
+```cmd
+cargo test
+cargo clippy -- -D warnings
+cargo fmt -- --check
+```
 
 ## License
 
-See LICENSE file.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
-
 This project was developed entirely with the assistance of AI coding agents.
