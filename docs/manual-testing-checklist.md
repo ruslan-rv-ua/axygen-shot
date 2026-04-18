@@ -625,9 +625,10 @@ $LASTEXITCODE
 
 | # | Тест | Команда / дія | Очікуваний результат |
 |---|------|---------------|---------------------|
-| 1 | Запуск shot-watch.exe двокліком | Двічі клацнути `shot-watch.exe` з релізної папки | Tray icon з'являється, консольного вікна немає |
-| 2 | shot.exe --watch запускає shot-watch.exe | `shot --watch --process=notepad.exe` | `status: ok` + PID, термінал повертає промпт, tray icon |
-| 3 | shot-watch.exe поруч з shot.exe | Перемістити shot-watch.exe в іншу теку, запустити `shot --watch` | Помилка: shot-watch.exe not found |
+| 1 | Запуск shot-watch.exe двокліком (з конфігом) | Двічі клацнути `shot-watch.exe` з теки де є `shot.toml` | Tray icon з'являється, консольного вікна немає |
+| 2 | Запуск shot-watch.exe двокліком (без конфігу) | Двічі клацнути `shot-watch.exe` з теки без `shot.toml` і без CLI-аргументів | MessageBox: "Configuration error: No target: provide --process or --title (or set in shot.toml)" |
+| 3 | shot.exe --watch запускає shot-watch.exe | `shot --watch --process=notepad.exe` | `status: ok` + PID, термінал повертає промпт, tray icon |
+| 4 | shot-watch.exe поруч з shot.exe | Перемістити shot-watch.exe в іншу теку, запустити `shot --watch` | Помилка: shot-watch.exe not found |
 
 ### 14.1 Базовий запуск
 
