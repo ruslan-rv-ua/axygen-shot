@@ -342,7 +342,7 @@ fn handle_startup_err(err_event: HANDLE, parent_pid: Option<u32>, err: &ShotErro
     }
 }
 
-fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
+pub fn run_daemon(cfg: &CaptureConfig, parent_pid: Option<u32>) -> Result<(), ShotError> {
     let (ok_event, err_event) = open_parent_events(parent_pid);
 
     // Single-instance guard: only one daemon may run system-wide.
