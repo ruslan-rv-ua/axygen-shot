@@ -39,7 +39,11 @@ fn run() -> Result<(), ShotError> {
                 .map_err(|e| ShotError::ConfigError(format!("Cannot determine CWD: {}", e)))?;
             let toml = config::find_config(&cwd)?;
             let cfg = config::merge(&args, toml)?;
-            watch::run(&cfg, args.daemon_parent_pid)
+            let child_pid = watch::spawn_daemon(&cfg)?;
+            if !cfg.quiet || cfg.verbose {
+                println!("status: ok\nwatch: started (PID {})", child_pid);
+            }
+            Ok(())
         }
     }
 }
