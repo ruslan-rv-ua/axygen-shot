@@ -1,5 +1,20 @@
 # Scoop Integration Implementation Plan
 
+> [!WARNING]
+> **Історичний запис. Реалізоване тут згодом замінено.**
+>
+> Описаний нижче механізм — workflow `update-scoop.yml`, який слав
+> `repository_dispatch` до `scoop-bucket`, і секрет `SCOOP_BUCKET_TOKEN` для
+> цього — прибрано. Маніфест тепер оновлює сам bucket: його workflow
+> `Excavator` читає `checkver` і `autoupdate` у `bucket/axygen-shot.json`,
+> запускається вручну з
+> [Actions](https://github.com/ruslan-rv-ua/scoop-bucket/actions), плюс раз на
+> добу о 04:20 UTC.
+>
+> Документ не переписано навмисно: він точно описує те, що було вирішено й
+> зроблено на вказану дату. Читайте його як запис, а не як інструкцію.
+
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Enable installation and updates of axygen-shot via Scoop package manager.
