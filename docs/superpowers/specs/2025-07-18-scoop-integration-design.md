@@ -1,5 +1,20 @@
 # Spec: Scoop інтеграція для axygen-shot
 
+> [!WARNING]
+> **Історичний запис. Реалізоване тут згодом замінено.**
+>
+> Описаний нижче механізм — workflow `update-scoop.yml`, який слав
+> `repository_dispatch` до `scoop-bucket`, і секрет `SCOOP_BUCKET_TOKEN` для
+> цього — прибрано. Маніфест тепер оновлює сам bucket: його workflow
+> `Excavator` читає `checkver` і `autoupdate` у `bucket/axygen-shot.json`,
+> запускається вручну з
+> [Actions](https://github.com/ruslan-rv-ua/scoop-bucket/actions), плюс раз на
+> добу о 04:20 UTC.
+>
+> Документ не переписано навмисно: він точно описує те, що було вирішено й
+> зроблено на вказану дату. Читайте його як запис, а не як інструкцію.
+
+
 **Дата:** 2025-07-18
 **Статус:** Затверджено
 
